@@ -1,0 +1,9 @@
+{
+  "name": "venttext-backend",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "twilio": "^5.3.0",
+    "pg": "^8.13.0"
+  }
+}
