@@ -1,0 +1,41 @@
+flowchart TD
+    A[Customer sends SMS<br/>to VentText number] --> B[SMS Gateway - Twilio<br/>receives message]
+    B --> C[Twilio fires webhook<br/>POST /webhook/sms/inbound]
+    C --> D[Backend: Inbound Handler]
+
+    D --> E{Known conversation?<br/>match on phone number<br/>+ merchant}
+    E -- No, new thread --> F[Identify merchant]
+    F --> F1{How was merchant<br/>identified?}
+    F1 -- Dedicated number/extension --> F2[Merchant = number dialed]
+    F1 -- Shared number + QR context --> F3[Merchant = ID embedded<br/>in first message/deep link]
+    F2 --> G[Create new Conversation record<br/>status: NEW]
+    F3 --> G
+
+    E -- Yes, existing thread --> H[Append message to<br/>existing Conversation]
+
+    G --> I[Run pipeline on message]
+    H --> I
+
+    I --> I1[Rate limit / abuse check]
+    I --> I2[Sentiment + severity scoring]
+    I --> I3[Check Reseats for<br/>matching receipt]
+    I1 --> J[Store Message in DB<br/>linked to Conversation]
+    I2 --> J
+    I3 --> J
+
+    J --> K[Publish event to<br/>real-time channel<br/>WebSocket/Pusher]
+    K --> L[Merchant Dashboard:<br/>Bad Experience Chat inbox]
+    L --> M[New thread appears live<br/>or existing thread updates]
+
+    M --> N{Merchant action}
+    N -- Replies in dashboard --> O[Backend: Outbound Handler]
+    O --> P[Twilio sends SMS<br/>back to customer]
+    P --> A
+
+    N -- Auto-resolve eligible<br/>verified + under coupon limit --> Q[Auto-issue coupon]
+    Q --> O
+
+    N -- No response in time --> R[Scheduled job checks<br/>response SLA]
+    R --> S[Escalation: notify customer,<br/>flag thread in dashboard]
+
+    N -- Marks Resolved --> T[Conversation status: RESOLVED<br/>archived in dashboard]

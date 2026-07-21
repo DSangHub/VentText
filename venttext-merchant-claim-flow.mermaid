@@ -1,0 +1,29 @@
+flowchart TD
+    A[Merchant record pre-seeded<br/>name, address, phone, category<br/>from public business data] --> B[Status: UNCLAIMED]
+
+    B --> C{First complaint arrives<br/>for this merchant}
+    C -- Yes --> D[Complaint routes to merchant<br/>but sits in a holding queue]
+    D --> E[Auto-email/text sent to<br/>merchant's listed phone/email:<br/>'A customer complaint is<br/>waiting for you on VentText']
+
+    B --> F{Merchant proactively<br/>searches for their business}
+    F --> G[Finds pre-seeded listing]
+
+    E --> H[Merchant clicks claim link]
+    G --> H
+
+    H --> I[Enter phone number tied<br/>to the listing]
+    I --> J[Verification code sent<br/>via SMS or email]
+    J --> K{Code matches listed<br/>phone/email on file?}
+
+    K -- No match --> L[Falls back to manual review:<br/>upload business license,<br/>utility bill, etc.]
+    L --> M[Manual approval by VentText team]
+
+    K -- Yes --> N[Status: CLAIMED]
+    M --> N
+
+    N --> O[Merchant sets up dashboard:<br/>coupon ceiling, response<br/>window, POS integration]
+    O --> P[Any held complaints in queue<br/>release into active dashboard]
+
+    D -.holding queue releases once claimed.-> P
+
+    N --> Q[Future complaints route<br/>directly, no more holding]
