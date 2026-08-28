@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VentText — Text-in Opt-in</title>
+<link rel="stylesheet" href="styles.css">
+<style>
+  .optin { max-width: 620px; margin: 0 auto; padding: 48px 28px 72px; text-align: center; }
+  .optin .eyebrow { justify-content: center; }
+  .card-optin { background: var(--paper-100); color: var(--paper-ink); border-radius: 16px;
+    padding: 34px 30px; margin: 22px auto 0; max-width: 460px; box-shadow: 0 10px 40px rgba(0,0,0,.35); }
+  .card-optin h1 { font-family: var(--mono); font-size: 1.7rem; margin-bottom: 6px; color: var(--ink-900); }
+  .card-optin .sub { color: var(--muted-dark); font-size: 1rem; margin-bottom: 20px; }
+  .card-optin img.qr { width: 220px; height: 220px; image-rendering: pixelated; background:#fff; border-radius: 10px; }
+  .card-optin .num { font-family: var(--mono); font-weight: 600; font-size: 1.15rem; margin: 16px 0 4px; color: var(--ink-900); }
+  .card-optin .steps { font-size: .95rem; color: var(--ink-700); margin: 10px 0 0; }
+  .disclosure { font-size: .8rem; line-height: 1.5; color: var(--muted-dark); margin: 22px auto 0; max-width: 460px; }
+  .disclosure a { color: var(--resolve-green-dim); text-decoration: underline; }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-inner">
+    <div class="logo"><span class="dot"></span>VentText</div>
+    <div class="nav-links">
+      <a href="index.html">Home</a>
+      <a href="how-it-works.html">How It Works</a>
+      <a href="merchants.html">For Merchants</a>
+      <a href="faq.html">FAQ</a>
+    </div>
+    <a href="sms:+15595505388?&amp;body=Hi%20VentText%2C%20I%20had%20a%20bad%20experience." class="btn btn-primary">Text Us Now</a>
+  </div>
+</nav>
+
+<main class="optin">
+  <div class="eyebrow">Opt-in collateral</div>
+  <h2 style="font-family:var(--mono);font-size:1.5rem;margin:8px 0 4px;">Join the VentText text program</h2>
+  <p style="color:var(--muted);max-width:48ch;margin:0 auto;">This is the sign-up card shown at participating businesses' checkout. Scanning it starts a text conversation — that's how customers opt in.</p>
+
+  <div class="card-optin">
+    <h1>Had a bad experience?</h1>
+    <div class="sub">Text it in — we'll get it to the business.</div>
+    <img class="qr" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAXIAAAFyCAIAAABnRsZeAAAHvElEQVR4nO3cMW5ENRhGUYKyBQrE/peGKFjE0FJZAl/r93s5p5/My2Ry5eKTvz6fzy8AnV+nHwB4G1kBYrICxGQFiMkKEJMVICYrQExWgJisADFZAWKyAsRkBYjJChCTFSAmK0BMVoCYrAAxWQFisgLEvnde/Nvvf1TPcYm///rz0E9ef1br99157dq5n/zE913b+Rs90c5fwWkFiMkKEJMVICYrQExWgJisADFZAWKyAsRkBYhtrWzXzm0ld+ysIXe2oTufxk/bd77P+/4X1pxWgJisADFZAWKyAsRkBYjJChCTFSAmK0BMVoDYwZXt2rmF37lF49SNs2t3bnDvvK32p61dp35fpxUgJitATFaAmKwAMVkBYrICxGQFiMkKEJMVIDa2sn2fcxvcqTt0zy1Wd3ald/5G/JvTChCTFSAmK0BMVoCYrAAxWQFisgLEZAWIyQoQs7L9D85tQ8/dZvrEZ7Z2fTqnFSAmK0BMVoCYrAAxWQFisgLEZAWIyQoQkxUgNrayfeKScmd1+sS169Qzn7u799xnteOJ/wtrTitATFaAmKwAMVkBYrICxGQFiMkKEJMVICYrQOzgyvbOReOOnfWn11avXZt65rX3/S+sOa0AMVkBYrICxGQFiMkKEJMVICYrQExWgJisALGvz+cz/QwvcW5J+b4t7J3ed6fsFKcVICYrQExWgJisADFZAWKyAsRkBYjJChCTFSC2tbK9c985dV/p2tT77rhzN3zufadM3aF77tNwWgFisgLEZAWIyQoQkxUgJitATFaAmKwAMVkBYt87Lz63lTy3Dpza4N55L+z7fqMpO7/v1I723LfdaQWIyQoQkxUgJitATFaAmKwAMVkBYrICxGQFiI3dZbvzk9emloV3PvNPu7v3zs/qiZtjK1vgIrICxGQFiMkKEJMVICYrQExWgJisADFZAWKXrmyf+L53uvPG2fc91blv3Y6pZ3ZaAWKyAsRkBYjJChCTFSAmK0BMVoCYrAAxWQFiWyvbtXN3u+54312nU/fgrk3taO+8cfbcU9257nVaAWKyAsRkBYjJChCTFSAmK0BMVoCYrAAxWQFil65s1+5cFk7tWdeeuO+8c1d652p8beqZnVaAmKwAMVkBYrICxGQFiMkKEJMVICYrQExWgNj31BtPbTSn3LkcfZ8nfs537rN3OK0AMVkBYrICxGQFiMkKEJMVICYrQExWgJisALGxle25ZeG521t3nNtKTt1We+dnde61d37Od37bnVaAmKwAMVkBYrICxGQFiMkKEJMVICYrQExWgNjWyvbOezTvXH++b0d7523ET3zmtTvv311zWgFisgLEZAWIyQoQkxUgJitATFaAmKwAMVkBYlsr26mN5k/bSj5xzfzEbeidnvg5O60AMVkBYrICxGQFiMkKEJMVICYrQExWgJisALGxu2zvXI7u7IZ3nLvp9s7d8BPf95w7v1c7nFaAmKwAMVkBYrICxGQFiMkKEJMVICYrQExWgNjX5/M59KOfeAfnOec+jamfvGPq9z23Zl4798x3/h85rQAxWQFisgLEZAWIyQoQkxUgJitATFaAmKwAsa27bNeeuByd2mhO/eRzG82p9ee5v+/UQnfH1DM7rQAxWQFisgLEZAWIyQoQkxUgJitATFaAmKwAsYN32a7deU/qjnO/0dqdt5numFoGP/EveOctuU4rQExWgJisADFZAWKyAsRkBYjJChCTFSAmK0Bs6y7bnZXeuf3fnXeO3nnj7Dl3LmV33vfcFnbq5uZznFaAmKwAMVkBYrICxGQFiMkKEJMVICYrQExWgNjWyvbc2vWcqR3tjqnN8Y6pFfX71sxP/Os7rQAxWQFisgLEZAWIyQoQkxUgJitATFaAmKwAsa/P5/O/X/zE/d/anTvLtSfeGvvE7e+Uc3fZnvtuOK0AMVkBYrICxGQFiMkKEJMVICYrQExWgJisALGtle1PM7UrnbrbdW1qv7vjzptu37fudVoBYrICxGQFiMkKEJMVICYrQExWgJisADFZAWLfOy++cx24Y70svHOxOrXBndqknnvmHec+jXN32Z7jtALEZAWIyQoQkxUgJitATFaAmKwAMVkBYrICxLZWtmvndpY7pu5JXTu30L3zHtwddz7z1E23U/vdNacVICYrQExWgJisADFZAWKyAsRkBYjJChCTFSB2cGW79tP2jk/chk7taKfuDJ66B3ftzu/zmtMKEJMVICYrQExWgJisADFZAWKyAsRkBYjJChAbW9k+0dTtvOf2uzueuP5cm/qcd9a9524y3uG0AsRkBYjJChCTFSAmK0BMVoCYrAAxWQFisgLErGz/g6n159QduueWo+e2oXfezrvjzo31mtMKEJMVICYrQExWgJisADFZAWKyAsRkBYjJChAbW9lO7f92PHHveM7OYvXc2vXcT77zL3jnd9JpBYjJChCTFSAmK0BMVoCYrAAxWQFisgLEZAWIHVzZPvHe0LWpW1Sn7medWqw+8X3vvDN457U7T+W0AsRkBYjJChCTFSAmK0BMVoCYrAAxWQFisgLEvj6fz/QzAK/itALEZAWIyQoQkxUgJitATFaAmKwAMVkBYrICxGQFiMkKEJMVICYrQExWgJisADFZAWKyAsRkBYjJChD7B9BABTVTFGcPAAAAAElFTkSuQmCC" alt="Scan to text VentText">
+    <div class="num">Scan, or text +1 (559) 550-5388</div>
+    <div class="steps">Reply with the business code shown at checkout (e.g. MARIO123) and what went wrong.</div>
+  </div>
+
+  <p class="disclosure">
+    By scanning or texting, you agree to receive recurring conversational text messages from VentText and the business about your inquiry. Consent is not a condition of purchase. Message frequency varies. <strong>Message &amp; data rates may apply.</strong> Reply <strong>STOP</strong> to opt out, <strong>HELP</strong> for help. VentText does not sell or share your mobile number or SMS consent with third parties for marketing.
+    <br><br>
+    <a href="privacy.html">Privacy Policy</a> · <a href="terms.html">SMS Terms</a> · VentText is a service of Lazy Man Ventures LLC.
+  </p>
+</main>
+
+<footer>
+  <div class="wrap footer-inner">
+    <div>© 2026 VentText — a service of Lazy Man Ventures LLC.</div>
+    <div class="footer-links">
+      <a href="how-it-works.html">How It Works</a>
+      <a href="merchants.html">For Merchants</a>
+      <a href="faq.html">FAQ</a>
+      <a href="privacy.html">Privacy</a>
+      <a href="terms.html">SMS Terms</a>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>
