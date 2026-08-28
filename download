@@ -1,0 +1,18 @@
+# Dependencies
+node_modules/
+
+# Vercel
+.vercel/
+
+# Env / secrets — never commit these
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS junk
+.DS_Store
+Thumbs.db

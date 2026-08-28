@@ -7,6 +7,7 @@ CREATE TABLE merchants (
   phone TEXT,                          -- merchant's own contact number, used for claim verification
   email TEXT,
   merchant_code TEXT UNIQUE NOT NULL,  -- short code embedded in QR/deep link, e.g. "MARIO123"
+  api_key TEXT UNIQUE,                 -- dashboard auth secret, issued at claim time (Bearer token)
   status TEXT NOT NULL DEFAULT 'UNCLAIMED', -- UNCLAIMED | PENDING | CLAIMED
   coupon_ceiling_cents INTEGER DEFAULT 1000, -- max auto-issued coupon value, e.g. $10.00
   monthly_cap_cents INTEGER DEFAULT 15000,   -- total auto-issued exposure per month
@@ -54,3 +55,5 @@ CREATE INDEX idx_conversations_customer ON conversations(customer_id);
 CREATE INDEX idx_messages_conversation ON messages(conversation_id);
 CREATE INDEX idx_customers_phone ON customers(phone);
 CREATE INDEX idx_merchants_code ON merchants(merchant_code);
+CREATE INDEX idx_merchants_api_key ON merchants(api_key);
+CREATE INDEX idx_conversations_open ON conversations(customer_id, merchant_id, status);

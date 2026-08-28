@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>VentText — Merchant Dashboard</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #171a21; --panel-2: #1e222b; --line: #2a2f3a;
+    --text: #e6e9ef; --muted: #9aa3b2; --accent: #4f8cff; --accent-2: #3a6fd8;
+    --inbound: #232833; --outbound: #2b4a7e; --danger: #e0523f; --warn: #e0a83f;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column;
+  }
+  header {
+    display: flex; align-items: center; gap: 12px; padding: 12px 18px;
+    background: var(--panel); border-bottom: 1px solid var(--line);
+  }
+  header h1 { font-size: 16px; margin: 0; font-weight: 600; }
+  header .meta { color: var(--muted); font-size: 13px; margin-left: auto; }
+  header button { background: none; border: 1px solid var(--line); color: var(--muted);
+    padding: 5px 10px; border-radius: 6px; cursor: pointer; font-size: 12px; }
+  .layout { flex: 1; display: flex; min-height: 0; }
+  .list { width: 340px; border-right: 1px solid var(--line); overflow-y: auto; background: var(--panel); }
+  .convo { padding: 12px 16px; border-bottom: 1px solid var(--line); cursor: pointer; }
+  .convo:hover { background: var(--panel-2); }
+  .convo.active { background: var(--panel-2); border-left: 3px solid var(--accent); padding-left: 13px; }
+  .convo .top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .convo .phone { font-weight: 600; font-size: 14px; }
+  .convo .preview { color: var(--muted); font-size: 13px; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pill { font-size: 11px; padding: 2px 7px; border-radius: 999px; background: var(--panel-2); color: var(--muted); border: 1px solid var(--line); }
+  .pill.sev-high { background: rgba(224,82,63,.15); color: var(--danger); border-color: transparent; }
+  .pill.sev-mid { background: rgba(224,168,63,.15); color: var(--warn); border-color: transparent; }
+  .thread { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .thread .head { padding: 12px 18px; border-bottom: 1px solid var(--line); background: var(--panel); }
+  .thread .head .who { font-weight: 600; }
+  .thread .head .sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .messages { flex: 1; overflow-y: auto; padding: 18px; display: flex; flex-direction: column; gap: 10px; }
+  .bubble { max-width: 68%; padding: 9px 13px; border-radius: 14px; font-size: 14px; line-height: 1.4; white-space: pre-wrap; word-wrap: break-word; }
+  .bubble.inbound { align-self: flex-start; background: var(--inbound); border-bottom-left-radius: 4px; }
+  .bubble.outbound { align-self: flex-end; background: var(--outbound); border-bottom-right-radius: 4px; }
+  .bubble .ts { display: block; font-size: 10px; color: var(--muted); margin-top: 4px; }
+  .composer { display: flex; gap: 10px; padding: 14px 18px; border-top: 1px solid var(--line); background: var(--panel); }
+  .composer input { flex: 1; background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
+    border-radius: 8px; padding: 10px 12px; font-size: 14px; }
+  .composer button, .gate button { background: var(--accent); border: none; color: white; padding: 10px 16px;
+    border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; }
+  .composer button:disabled { opacity: .5; cursor: default; }
+  .empty { margin: auto; color: var(--muted); font-size: 14px; text-align: center; padding: 40px; }
+  .gate { position: fixed; inset: 0; background: rgba(10,12,16,.94); display: flex; align-items: center; justify-content: center; z-index: 10; }
+  .gate .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 28px; width: 380px; }
+  .gate h2 { margin: 0 0 6px; font-size: 18px; }
+  .gate p { color: var(--muted); font-size: 13px; margin: 0 0 16px; }
+  .gate input { width: 100%; background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
+    border-radius: 8px; padding: 10px 12px; font-size: 14px; margin-bottom: 12px; }
+  .gate .err { color: var(--danger); font-size: 13px; margin-bottom: 10px; min-height: 16px; }
+</style>
+</head>
+<body>
+  <div class="gate" id="gate">
+    <div class="card">
+      <h2>VentText Dashboard</h2>
+      <p>Enter your merchant API key to view and reply to complaint threads.</p>
+      <div class="err" id="gateErr"></div>
+      <input id="apiKeyInput" type="password" placeholder="vt_live_..." autocomplete="off" />
+      <button id="gateBtn">Open inbox</button>
+    </div>
+  </div>
+
+  <header>
+    <h1>VentText</h1>
+    <span class="meta" id="merchantMeta"></span>
+    <button id="refreshBtn" title="Refresh">Refresh</button>
+    <button id="logoutBtn">Sign out</button>
+  </header>
+
+  <div class="layout">
+    <div class="list" id="list"></div>
+    <div class="thread">
+      <div id="threadHead" class="head" style="display:none"></div>
+      <div class="messages" id="messages">
+        <div class="empty">Select a conversation to view the thread.</div>
+      </div>
+      <div class="composer" id="composer" style="display:none">
+        <input id="replyInput" placeholder="Type a reply… (sent as an SMS to the customer)" />
+        <button id="sendBtn">Send</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+// Merchant dashboard client. Talks to the /api/merchant/* endpoints using the
+// merchant's API key as a Bearer token. Live updates via polling (no config
+// needed); wire Pusher in here if you want instant push.
+const store = {
+  get key() {
+    try { return localStorage.getItem('vt_api_key') || _mem; } catch { return _mem; }
+  },
+  set key(v) {
+    _mem = v;
+    try { if (v) localStorage.setItem('vt_api_key', v); else localStorage.removeItem('vt_api_key'); } catch {}
+  }
+};
+let _mem = null;
+let activeId = null;
+let pollTimer = null;
+
+function authHeaders() { return { 'Authorization': 'Bearer ' + store.key }; }
+
+async function api(path, opts = {}) {
+  const res = await fetch(path, {
+    ...opts,
+    headers: { 'Content-Type': 'application/json', ...authHeaders(), ...(opts.headers || {}) },
+  });
+  if (res.status === 401) { signOut('Invalid or expired API key.'); throw new Error('unauthorized'); }
+  if (!res.ok) throw new Error('Request failed: ' + res.status);
+  return res.json();
+}
+
+function fmtTime(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return d.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+function sevClass(s) { return s >= 50 ? 'sev-high' : s >= 20 ? 'sev-mid' : ''; }
+
+async function loadInbox() {
+  let data;
+  try { data = await api('/api/merchant/conversations'); } catch { return; }
+  document.getElementById('merchantMeta').textContent =
+    data.merchant.name + ' · ' + data.merchant.status;
+  const list = document.getElementById('list');
+  if (!data.conversations.length) {
+    list.innerHTML = '<div class="empty">No open complaints. 🎉</div>';
+    return;
+  }
+  list.innerHTML = data.conversations.map(c => `
+    <div class="convo ${c.id === activeId ? 'active' : ''}" data-id="${c.id}">
+      <div class="top">
+        <span class="phone">${c.customer_name || c.customer_phone}</span>
+        ${c.severity_score != null ? `<span class="pill ${sevClass(c.severity_score)}">sev ${c.severity_score}</span>` : ''}
+      </div>
+      <div class="preview">${escapeHtml(c.last_message || '')}</div>
+      <div class="preview" style="font-size:11px">${c.status} · ${fmtTime(c.last_message_at || c.created_at)}</div>
+    </div>`).join('');
+  list.querySelectorAll('.convo').forEach(el =>
+    el.addEventListener('click', () => openThread(el.dataset.id)));
+}
+
+async function openThread(id) {
+  activeId = id;
+  document.querySelectorAll('.convo').forEach(el =>
+    el.classList.toggle('active', el.dataset.id === id));
+  let data;
+  try { data = await api('/api/merchant/messages?conversationId=' + encodeURIComponent(id)); }
+  catch { return; }
+  const head = document.getElementById('threadHead');
+  head.style.display = 'block';
+  const c = data.conversation;
+  head.innerHTML = `<div class="who">${c.customer_name || c.customer_phone}</div>
+    <div class="sub">${c.status}${c.severity_score != null ? ' · severity ' + c.severity_score : ''}
+    ${c.response_deadline ? ' · due ' + fmtTime(c.response_deadline) : ''}</div>`;
+  const box = document.getElementById('messages');
+  box.innerHTML = data.messages.map(m => `
+    <div class="bubble ${m.direction}">
+      ${escapeHtml(m.body || '')}
+      <span class="ts">${m.sender} · ${fmtTime(m.created_at)}${m.status ? ' · ' + m.status : ''}</span>
+    </div>`).join('') || '<div class="empty">No messages yet.</div>';
+  box.scrollTop = box.scrollHeight;
+  document.getElementById('composer').style.display = 'flex';
+}
+
+async function sendReply() {
+  const input = document.getElementById('replyInput');
+  const message = input.value.trim();
+  if (!message || !activeId) return;
+  const btn = document.getElementById('sendBtn');
+  btn.disabled = true;
+  try {
+    await api('/api/merchant/reply', {
+      method: 'POST',
+      body: JSON.stringify({ conversationId: activeId, message }),
+    });
+    input.value = '';
+    await openThread(activeId);
+    await loadInbox();
+  } catch (e) {
+    alert('Could not send: ' + e.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, ch =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+}
+
+function startPolling() {
+  clearInterval(pollTimer);
+  pollTimer = setInterval(() => {
+    loadInbox();
+    if (activeId) openThread(activeId);
+  }, 10000);
+}
+
+function signIn(key) {
+  store.key = key;
+  document.getElementById('gate').style.display = 'none';
+  loadInbox();
+  startPolling();
+}
+function signOut(msg) {
+  clearInterval(pollTimer);
+  store.key = null;
+  activeId = null;
+  document.getElementById('gate').style.display = 'flex';
+  document.getElementById('gateErr').textContent = msg || '';
+}
+
+// Wiring
+document.getElementById('gateBtn').addEventListener('click', () => {
+  const v = document.getElementById('apiKeyInput').value.trim();
+  if (v) signIn(v);
+});
+document.getElementById('apiKeyInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') document.getElementById('gateBtn').click();
+});
+document.getElementById('sendBtn').addEventListener('click', sendReply);
+document.getElementById('replyInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') sendReply();
+});
+document.getElementById('refreshBtn').addEventListener('click', () => {
+  loadInbox(); if (activeId) openThread(activeId);
+});
+document.getElementById('logoutBtn').addEventListener('click', () => signOut());
+
+// Auto-open if a key was saved from a prior session.
+if (store.key) signIn(store.key);
+</script>
+</body>
+</html>
