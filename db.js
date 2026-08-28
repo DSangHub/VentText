@@ -14,9 +14,9 @@ export function getDb() {
     pool = new Pool({
       connectionString: process.env.DATABASE_URL,
       ssl: { rejectUnauthorized: false },
-      options: `-c search_path=${SCHEMA}`,
     });
-    // Belt-and-suspenders: also set it on each fresh connection.
+    // The database login already defaults to the venttext schema (set server-side),
+    // so this works with any pooler mode. This SET is a harmless extra safety net.
     pool.on('connect', (client) => {
       client.query(`SET search_path TO ${SCHEMA}`).catch(() => {});
     });
