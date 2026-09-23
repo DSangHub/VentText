@@ -1,12 +1,25 @@
 import { timingSafeEqual } from 'node:crypto';
 import { Pool } from 'pg';
-import { getDb } from '../../db.js';
 
 // Temporary, token-protected migration route. Remove after the database cutover.
 export const config = { maxDuration: 60 };
 
 const tables = ['merchants', 'customers', 'conversations', 'messages'];
 const maxRowsPerTable = 5000;
+let sourcePool;
+
+function getSourceDb() {
+  if (!sourcePool) {
+    sourcePool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: { rejectUnauthorized: false },
+    });
+    sourcePool.on('connect', client => {
+      client.query('SET search_path TO venttext, public').catch(() => {});
+    });
+  }
+  return sourcePool;
+}
 
 function authorized(req) {
   const expected = process.env.VENTTEXT_MIGRATION_TOKEN;
@@ -28,7 +41,7 @@ export default async function handler(req, res) {
     try {
       const counts = {};
       for (const table of tables) {
-        const result = await getDb().query(`SELECT count(*)::int AS count FROM ${identifier(table)}`);
+        const result = await getSourceDb().query(`SELECT count(*)::int AS count FROM ${identifier(table)}`);
         counts[table] = result.rows[0].count;
       }
       return res.status(200).json({ sourceCounts: counts });
@@ -41,7 +54,7 @@ export default async function handler(req, res) {
     return res.status(503).json({ error: 'Target database is not configured' });
   }
 
-  const source = await getDb().connect();
+  const source = await getSourceDb().connect();
   const targetPool = new Pool({
     connectionString: process.env.SUPABASE_DATABASE_URL,
     ssl: { rejectUnauthorized: false },
