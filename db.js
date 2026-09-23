@@ -12,7 +12,9 @@ const SCHEMA = process.env.DB_SCHEMA || 'venttext,public';
 export function getDb() {
   if (!pool) {
     pool = new Pool({
-      connectionString: process.env.DATABASE_URL,
+      // After migration, production uses the dedicated Supabase secret.
+      // DATABASE_URL remains available briefly for source reconciliation.
+      connectionString: process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL,
       ssl: { rejectUnauthorized: false },
     });
     // The database login already defaults to the venttext schema (set server-side),
