@@ -4,6 +4,8 @@
 CREATE TABLE merchants (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
+  address TEXT,
+  contact_person TEXT,
   phone TEXT,                          -- merchant's own contact number, used for claim verification
   email TEXT,
   merchant_code TEXT UNIQUE NOT NULL,  -- short code embedded in QR/deep link, e.g. "MARIO123"

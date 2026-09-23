@@ -33,7 +33,7 @@
       <a href="index.html">Home</a>
       <a href="how-it-works.html">How It Works</a>
       <a href="merchants.html">For Merchants</a>
-      <a href="dashboard.html">Business Login</a>
+      <a href="merchant-signup.html">Business Sign up / Sign in</a>
       <a href="faq.html">FAQ</a>
       <a href="join.html">Sign Up</a>
     </div>
@@ -43,14 +43,17 @@
 
 <main class="join">
   <h1>Create your business profile</h1>
-  <p class="lead">Tell us about your business and we'll set up your VentText dashboard — usually within one business day. Already have login details? <a href="dashboard.html">Go to Business Login</a> instead.</p>
+  <p class="lead">Tell us about your business so we can verify your profile. Already have a dashboard key? <a href="dashboard.html">Sign in</a>.</p>
 
   <div class="form-card">
-    <form id="signupForm" novalidate>
+    <form id="signupForm">
       <label for="bizName">Business name</label>
       <input type="text" id="bizName" name="bizName" autocomplete="organization" required>
 
-      <label for="contactName">Your name</label>
+      <label for="address">Business address</label>
+      <input type="text" id="address" name="address" autocomplete="street-address" required>
+
+      <label for="contactName">Contact person</label>
       <input type="text" id="contactName" name="contactName" autocomplete="name" required>
 
       <label for="phone">Business phone number</label>
@@ -67,7 +70,7 @@
       </select>
 
       <button type="submit" id="submitBtn">Request my dashboard</button>
-      <p class="note">We'll text or email the number/address above to verify you're the business owner before your dashboard goes live — same as claiming a listing.</p>
+      <p class="note" id="formStatus" role="status">We'll contact you to verify your business before dashboard access is enabled.</p>
     </form>
 
     <div class="ok" id="okMsg"></div>
@@ -80,7 +83,7 @@
     <div class="footer-links">
       <a href="how-it-works.html">How It Works</a>
       <a href="merchants.html">For Merchants</a>
-      <a href="dashboard.html">Business Login</a>
+      <a href="merchant-signup.html">Business Sign up / Sign in</a>
       <a href="faq.html">FAQ</a>
       <a href="join.html">Sign Up for Texts</a>
       <a href="privacy.html">Privacy</a>
@@ -92,22 +95,34 @@
 <script>
   var form = document.getElementById('signupForm');
   var ok = document.getElementById('okMsg');
-  form.addEventListener('submit', function (e) {
+  form.addEventListener('submit', async function (e) {
     e.preventDefault();
-    var biz = document.getElementById('bizName').value.trim();
-    var contact = document.getElementById('contactName').value.trim();
-    var phone = document.getElementById('phone').value.trim();
-    var email = document.getElementById('email').value.trim();
-    if (!biz || !contact || !phone || !email) {
-      alert('Please fill in your business name, your name, phone, and email.');
-      return;
+    if (!form.reportValidity()) return;
+    var button = document.getElementById('submitBtn');
+    var status = document.getElementById('formStatus');
+    button.disabled = true;
+    status.textContent = 'Submitting your business profile…';
+    try {
+      var response = await fetch('/api/merchant/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: document.getElementById('bizName').value.trim(),
+          address: document.getElementById('address').value.trim(),
+          contactPerson: document.getElementById('contactName').value.trim(),
+          phone: document.getElementById('phone').value.trim(),
+          email: document.getElementById('email').value.trim()
+        })
+      });
+      var result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Please try again.');
+      form.style.display = 'none';
+      ok.style.display = 'block';
+      ok.textContent = result.message;
+    } catch (error) {
+      status.textContent = error.message || 'Could not submit your profile. Please try again.';
+      button.disabled = false;
     }
-    form.style.display = 'none';
-    ok.style.display = 'block';
-    ok.innerHTML = "Thanks, " + contact.replace(/[<>]/g,'') + "! We've got a profile started for <strong>" +
-      biz.replace(/[<>]/g,'') + "</strong>. We'll reach out at <strong>" + phone.replace(/[<>]/g,'') +
-      "</strong> or <strong>" + email.replace(/[<>]/g,'') +
-      "</strong> to verify your business and send your dashboard login. Questions in the meantime? Text us at <strong>+1 (559) 550-5388</strong>.";
   });
 </script>
 </body>
