@@ -7,6 +7,7 @@ CREATE TABLE merchants (
   address TEXT,
   contact_person TEXT,
   phone TEXT,                          -- merchant's own contact number, used for claim verification
+  sms_phone TEXT,                      -- separately supplied mobile number for opted-in notices
   email TEXT,
   merchant_code TEXT UNIQUE NOT NULL,  -- short code embedded in QR/deep link, e.g. "MARIO123"
   google_place_id TEXT UNIQUE,          -- only Google Place ID is retained; no Places content cached

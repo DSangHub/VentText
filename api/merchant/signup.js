@@ -12,7 +12,7 @@ function usMobileNumber(value) {
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-  const { name, address, contactPerson, phone, email, smsConsent } = req.body || {};
+  const { name, address, contactPerson, phone, email, smsConsent, smsPhone } = req.body || {};
   const fields = [name, address, contactPerson, phone, email];
   if (fields.some(value => typeof value !== 'string' || !value.trim() || value.length > 255) ||
       !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !/^[+\d()\s.-]{7,25}$/.test(phone)) {
@@ -20,6 +20,11 @@ export default async function handler(req, res) {
   }
   const normalizedPhone = usMobileNumber(phone);
   if (!normalizedPhone) return res.status(400).json({ error: 'Enter a valid US phone number.' });
+  const notificationPhone = smsConsent === true && typeof smsPhone === 'string'
+    ? usMobileNumber(smsPhone) : null;
+  if (smsConsent === true && !notificationPhone) {
+    return res.status(400).json({ error: 'Enter a valid US mobile number for SMS notifications.' });
+  }
   try {
     const code = 'VT' + randomBytes(8).toString('hex').toUpperCase();
     const db = getDb();
@@ -27,17 +32,18 @@ export default async function handler(req, res) {
     try { placeId = await findBusinessPlace(name.trim(), address.trim()); }
     catch (error) { console.error('Signup place lookup failed:', error); }
     const values = [name.trim(), address.trim(), contactPerson.trim(), normalizedPhone,
-      email.trim().toLowerCase(), code, smsConsent === true, placeId];
+      email.trim().toLowerCase(), code, smsConsent === true, placeId, notificationPhone];
     let saved;
     if (placeId) {
       saved = await db.query(
         `INSERT INTO merchants (name, address, contact_person, phone, email, merchant_code, status,
-                                sms_consent_at, sms_consent_source, google_place_id)
+                                sms_consent_at, sms_consent_source, google_place_id, sms_phone)
          VALUES ($1,$2,$3,$4,$5,$6,'PENDING', CASE WHEN $7 THEN now() END,
-                 CASE WHEN $7 THEN 'merchant_signup' END,$8)
+                 CASE WHEN $7 THEN 'merchant_signup' END,$8,$9)
          ON CONFLICT (google_place_id) DO UPDATE SET
            name = EXCLUDED.name, address = EXCLUDED.address, contact_person = EXCLUDED.contact_person,
-           phone = EXCLUDED.phone, email = EXCLUDED.email, status = 'PENDING',
+           phone = EXCLUDED.phone, sms_phone = EXCLUDED.sms_phone,
+           email = EXCLUDED.email, status = 'PENDING',
            sms_consent_at = EXCLUDED.sms_consent_at, sms_consent_source = EXCLUDED.sms_consent_source,
            sms_confirmed_at = NULL, sms_opted_out_at = NULL
          WHERE merchants.status = 'UNCLAIMED'
@@ -47,16 +53,16 @@ export default async function handler(req, res) {
     } else {
       saved = await db.query(
         `INSERT INTO merchants (name, address, contact_person, phone, email, merchant_code, status,
-                                sms_consent_at, sms_consent_source)
+                                sms_consent_at, sms_consent_source, sms_phone)
          VALUES ($1,$2,$3,$4,$5,$6,'PENDING', CASE WHEN $7 THEN now() END,
-                 CASE WHEN $7 THEN 'merchant_signup' END)
-         RETURNING merchant_code`, values.slice(0, 7)
+                 CASE WHEN $7 THEN 'merchant_signup' END,$8)
+         RETURNING merchant_code`, [...values.slice(0, 7), notificationPhone]
       );
     }
     let message = 'Business profile received. We will contact you to verify it before dashboard access is enabled.';
     if (smsConsent === true) {
       try {
-        await sendSms(normalizedPhone,
+        await sendSms(notificationPhone,
           `VentText: Reply YES ${saved.rows[0].merchant_code} to confirm customer message notifications for your business. Reply STOP to opt out.`);
         message += ' Check your phone and reply YES with the code shown in our text to confirm notifications.';
       } catch (error) {
