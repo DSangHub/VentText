@@ -9,6 +9,12 @@ CREATE TABLE merchants (
   phone TEXT,                          -- merchant's own contact number, used for claim verification
   email TEXT,
   merchant_code TEXT UNIQUE NOT NULL,  -- short code embedded in QR/deep link, e.g. "MARIO123"
+  google_place_id TEXT UNIQUE,          -- only Google Place ID is retained; no Places content cached
+  sms_consent_at TIMESTAMPTZ,
+  sms_consent_source TEXT,
+  sms_confirmed_at TIMESTAMPTZ,
+  sms_opted_out_at TIMESTAMPTZ,
+  notice_sent_at TIMESTAMPTZ,
   api_key TEXT UNIQUE,                 -- dashboard auth secret, issued at claim time (Bearer token)
   status TEXT NOT NULL DEFAULT 'UNCLAIMED', -- UNCLAIMED | PENDING | CLAIMED
   coupon_ceiling_cents INTEGER DEFAULT 1000, -- max auto-issued coupon value, e.g. $10.00

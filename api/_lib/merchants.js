@@ -3,11 +3,16 @@
 // code embedded on the customer's FIRST message (e.g. a QR code opens the SMS
 // app pre-filled with "MARIO123 - "). See venttext-sms-to-chat-architecture.md.
 
+import { randomBytes } from 'node:crypto';
+import { findBusinessPlace } from './google-places.js';
+
 // A merchant code is a short alphanumeric token, e.g. MARIO123. We look for it
 // at the very start of the message, optionally followed by a separator and the
 // real complaint text. We require at least one digit so ordinary opening words
 // ("Hello - the food was cold") aren't mistaken for a code.
 const CODE_RE = /^\s*([A-Za-z][A-Za-z0-9]{2,23})\s*(?:[-:|]\s*|\s+)([\s\S]*)$/;
+// Customer-supplied business details, never copied from Google Places content.
+const BUSINESS_RE = /^\s*BUSINESS:\s*([^|]{2,120})\s*\|\s*([^|]{2,160})\s*\|\s*([\s\S]{1,2000})$/i;
 
 /**
  * Pull a merchant code off the front of an inbound message body.
@@ -36,6 +41,24 @@ export function parseMerchantCode(body) {
  * Returns { merchant, autoSeeded } or null.
  */
 export async function resolveMerchant(db, body) {
+  const business = typeof body === 'string' && body.match(BUSINESS_RE);
+  if (business) {
+    const name = business[1].trim();
+    const location = business[2].trim();
+    const placeId = await findBusinessPlace(name, location);
+    if (!placeId) return null;
+    const found = await db.query('SELECT * FROM merchants WHERE google_place_id = $1', [placeId]);
+    if (found.rows.length) return { merchant: found.rows[0], autoSeeded: false, rest: business[3].trim() };
+    const code = 'VT' + randomBytes(8).toString('hex').toUpperCase();
+    const seeded = await db.query(
+      `INSERT INTO merchants (name, address, merchant_code, status, google_place_id)
+       VALUES ($1, $2, $3, 'UNCLAIMED', $4)
+       ON CONFLICT (google_place_id) DO UPDATE SET google_place_id = EXCLUDED.google_place_id
+       RETURNING *`,
+      [name, location, code, placeId]
+    );
+    return { merchant: seeded.rows[0], autoSeeded: true, rest: business[3].trim() };
+  }
   const parsed = parseMerchantCode(body);
   if (!parsed) return null;
 
