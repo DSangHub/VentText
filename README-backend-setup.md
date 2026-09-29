@@ -152,3 +152,23 @@ UPDATE merchants
 - **Auto-resolution / coupon issuing** — the schema supports it (`coupon_ceiling_cents`, `coupon_issued_cents`); the decision logic isn't built.
 - **SLA escalation job** — `response_deadline` is set on each conversation, but nothing yet fires the overdue-escalation text; add a cron/background job.
 - **Full merchant auth/login** — the API-key scheme is real but minimal; swap `auth.js` for a session/login system when you build merchant accounts. The claim/verification flow (SMS/email code) from the claim-flow doc still needs building.
+
+## Google business matching and merchant SMS notifications
+
+Apply `migrations/003_google_business_notifications.sql` to the production VentText schema, then set
+`GOOGLE_PLACES_API_KEY` as a **server-only** Vercel Production secret. Enable Places API (New) and billing
+in the Google Cloud project, restrict the key to the Places API, and set a budget/usage quota. Redeploy.
+
+Customers can text `BUSINESS: Business Name | City, State | what happened` when no merchant code is
+available. A Google Places Text Search checks for one unambiguous business name and location match.
+Only the Google Place ID is saved. The name and location in the merchant record come from the
+customer's text, not Google content. If there is no exact match, the message is held unassigned
+and the customer is asked to correct the business details. The key is optional: code routing still
+works without it. Lookup is limited to three inbound messages per sender per hour.
+
+Businesses opt in on the signup form with a separate unchecked SMS choice. Twilio sends a
+confirmation request to the phone number the business supplied. A reply of `YES <code>` from that
+same number enables a daily, generic notification when customer messages are waiting. `STOP`
+withdraws consent. Google-listed phone numbers are never used as SMS recipients: a public phone
+listing is not SMS consent. Business profile verification and dashboard key issuance remain manual.
+Verify the Twilio sender's registration and campaign settings before sending US application texts.

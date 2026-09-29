@@ -15,6 +15,9 @@
     width: 100%; padding: 11px 13px; border: 1px solid #c9c1b0; border-radius: 8px; font-size: 1rem;
     background: #fff; color: var(--ink-900); margin-bottom: 16px; }
   .note { font-size: .78rem; color: var(--muted-dark); margin-top: 12px; }
+  .sms-choice { display: flex; gap: 10px; align-items: flex-start; margin: 4px 0 12px; }
+  .sms-choice input { margin-top: 3px; }
+  .sms-choice label { font-weight: 400; font-size: .84rem; line-height: 1.5; }
   .join button { margin-top: 6px; width: 100%; background: var(--stamp-red); color: #fff; border: none;
     padding: 12px; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer; }
   .join button:disabled { opacity: .5; cursor: not-allowed; }
@@ -58,6 +61,11 @@
 
       <label for="phone">Business phone number</label>
       <input type="tel" id="phone" name="phone" placeholder="(555) 555-5555" autocomplete="tel" required>
+
+      <div class="sms-choice">
+        <input type="checkbox" id="smsConsent" name="smsConsent">
+        <label for="smsConsent">I agree to receive VentText customer message notifications at the number above after I confirm by replying to a verification text. Message frequency varies; message and data rates may apply. Reply STOP to opt out or HELP for help. Consent is optional and is not required to create a profile. See <a href="terms.html">SMS Terms</a> and <a href="privacy.html">Privacy Policy</a>.</label>
+      </div>
 
       <label for="email">Email</label>
       <input type="email" id="email" name="email" autocomplete="email" required>
@@ -111,7 +119,8 @@
           address: document.getElementById('address').value.trim(),
           contactPerson: document.getElementById('contactName').value.trim(),
           phone: document.getElementById('phone').value.trim(),
-          email: document.getElementById('email').value.trim()
+          email: document.getElementById('email').value.trim(),
+          smsConsent: document.getElementById('smsConsent').checked
         })
       });
       var result = await response.json();

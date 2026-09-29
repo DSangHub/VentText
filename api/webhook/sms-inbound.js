@@ -13,6 +13,7 @@ import { sendSms } from '../_lib/twilio.js';
 import { resolveMerchant } from '../_lib/merchants.js';
 import { checkRateLimit, scoreSeverity } from '../_lib/pipeline.js';
 import { newMessageEvent } from '../_lib/realtime.js';
+import { notifyMerchantIfSubscribed } from '../_lib/merchant-notifications.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
@@ -26,12 +27,49 @@ export default async function handler(req, res) {
   );
   if (!isValid) return res.status(403).send('Invalid signature');
 
-  const { From: fromNumber, Body: body, MessageSid: sid, NumMedia } = req.body;
+  const { From: fromNumber, Body: inboundBody, MessageSid: sid, NumMedia } = req.body;
+  const body = String(inboundBody || '');
   const mediaUrl = Number(NumMedia) > 0 ? req.body.MediaUrl0 : null;
 
   const db = getDb();
 
   try {
+    // A business confirms the number it entered on the signup form by replying
+    // from that number. STOP withdraws its notification consent.
+    if (/^STOP\s*$/i.test(body.trim())) {
+      await db.query(
+        `UPDATE merchants SET sms_confirmed_at = NULL, sms_opted_out_at = now()
+          WHERE phone = $1 AND sms_consent_at IS NOT NULL`, [fromNumber]
+      );
+      return res.status(200).set('Content-Type', 'text/xml').send('<Response></Response>');
+    }
+    if (/^START\s*$/i.test(body.trim())) {
+      const restarted = await db.query(
+        `UPDATE merchants SET sms_opted_out_at = NULL, sms_confirmed_at = now()
+          WHERE phone = $1 AND sms_consent_at IS NOT NULL AND sms_opted_out_at IS NOT NULL
+          RETURNING id`, [fromNumber]
+      );
+      for (const merchant of restarted.rows) {
+        try { await notifyMerchantIfSubscribed(db, merchant.id); }
+        catch (error) { console.error('Merchant notice failed:', error); }
+      }
+      return res.status(200).set('Content-Type', 'text/xml').send('<Response></Response>');
+    }
+    const confirmation = body.trim().match(/^YES\s+(VT[A-F0-9]{16})$/i);
+    if (confirmation) {
+      const updated = await db.query(
+        `UPDATE merchants SET sms_confirmed_at = now(), sms_opted_out_at = NULL
+          WHERE phone = $1 AND merchant_code = $2 AND sms_consent_at IS NOT NULL
+          RETURNING id`, [fromNumber, confirmation[1].toUpperCase()]
+      );
+      if (updated.rows.length) {
+        await sendSms(fromNumber, 'VentText: Your business message notifications are on. Reply STOP to opt out.');
+        try { await notifyMerchantIfSubscribed(db, updated.rows[0].id); }
+        catch (error) { console.error('Merchant notice failed:', error); }
+      }
+      return res.status(200).set('Content-Type', 'text/xml').send('<Response></Response>');
+    }
+
     // 2. Find or create the customer.
     let customer = await db.query('SELECT * FROM customers WHERE phone = $1', [fromNumber]);
     if (customer.rows.length === 0) {
@@ -44,12 +82,28 @@ export default async function handler(req, res) {
 
     // 3. Identify which merchant this is for (Option B). A merchant code on the
     //    first message resolves (or auto-seeds) the merchant.
-    const resolved = await resolveMerchant(db, body);
+    let resolved = null;
+    const structured = /^\s*BUSINESS:/i.test(body);
+    try {
+      if (structured) {
+        // A real Twilio sender may still repeat requests; cap paid Google lookups.
+        const recent = await db.query(
+          `SELECT count(*)::int AS count FROM messages m
+             JOIN conversations c ON c.id = m.conversation_id
+             JOIN customers cu ON cu.id = c.customer_id
+            WHERE cu.phone = $1 AND m.direction = 'inbound'
+              AND m.created_at > now() - interval '1 hour'`, [fromNumber]
+        );
+        if (recent.rows[0].count < 3) resolved = await resolveMerchant(db, body);
+      } else {
+        resolved = await resolveMerchant(db, body);
+      }
+    } catch (error) { console.error('Merchant lookup failed:', error); }
     const merchant = resolved ? resolved.merchant : null;
 
     // 4. Pick the conversation to append to.
     const { conversationId, merchantId, promptForCode } =
-      await selectConversation(db, customerId, merchant);
+      await selectConversation(db, customerId, merchant, structured && !merchant);
 
     // 5. Store the inbound message.
     const complaintText = resolved && resolved.rest ? resolved.rest : body;
@@ -81,11 +135,13 @@ export default async function handler(req, res) {
         severity_score: severity,
         created_at: inserted.rows[0].created_at,
       });
+      try { await notifyMerchantIfSubscribed(db, merchantId); }
+      catch (error) { console.error('Merchant notice failed:', error); }
     }
 
     // 8. Reply to the customer (unless rate-limited, to avoid a reply storm).
     if (!limited) {
-      await sendSms(fromNumber, ackMessage({ promptForCode, merchant }));
+      await sendSms(fromNumber, ackMessage({ promptForCode, merchant, body }));
     }
 
     // 9. Twilio expects a response; empty TwiML is fine since we replied via the API.
@@ -104,7 +160,7 @@ export default async function handler(req, res) {
  * - No merchant code: continue the customer's most recent open thread if any,
  *   otherwise open an unassigned thread and prompt them for the business code.
  */
-async function selectConversation(db, customerId, merchant) {
+async function selectConversation(db, customerId, merchant, forceUnassigned = false) {
   if (merchant) {
     // Existing open thread for this exact (customer, merchant) pair?
     const open = await db.query(
@@ -146,6 +202,13 @@ async function selectConversation(db, customerId, merchant) {
   }
 
   // No merchant code present — continue any open thread, else open an unassigned one.
+  if (forceUnassigned) {
+    const created = await db.query(
+      `INSERT INTO conversations (customer_id, status) VALUES ($1, 'NEW') RETURNING id`,
+      [customerId]
+    );
+    return { conversationId: created.rows[0].id, merchantId: null, promptForCode: true };
+  }
   const anyOpen = await db.query(
     `SELECT id, merchant_id FROM conversations
       WHERE customer_id = $1 AND status != 'RESOLVED'
@@ -167,13 +230,15 @@ async function selectConversation(db, customerId, merchant) {
   return { conversationId: created.rows[0].id, merchantId: null, promptForCode: true };
 }
 
-function ackMessage({ promptForCode, merchant }) {
+function ackMessage({ promptForCode, merchant, body }) {
   if (promptForCode) {
-    return "Thanks for reaching out. Which business is this about? Reply with the code shown at checkout (e.g. MARIO123) so we can route this to them.";
+    if (/^\s*BUSINESS:/i.test(body)) {
+      return 'We saved your message but could not match that business. Please check the name and location, then text BUSINESS: Name | City, State | what happened.';
+    }
+    return 'Thanks for reaching out. Reply with the code shown at checkout, or text BUSINESS: Name | City, State | what happened.';
   }
   if (merchant && merchant.status !== 'CLAIMED') {
-    // Holding-queue case: the business hasn't claimed VentText yet.
-    return "Got it — we've logged your complaint and are notifying the business. They'll follow up once they respond.";
+    return "Got it — we've logged your message. The business can respond after it joins and verifies its profile.";
   }
   return "Got it — we're on it. We'll follow up shortly.";
 }
