@@ -166,8 +166,8 @@ customer's text, not Google content. If there is no exact match, the message is 
 and the customer is asked to correct the business details. The key is optional: code routing still
 works without it. Lookup is limited to three inbound messages per sender per hour.
 
-Businesses opt in on the signup form with a separate unchecked SMS choice. Twilio sends a
-confirmation request to the phone number the business supplied. A reply of `YES <code>` from that
+Businesses opt in on the signup form with a separate unchecked SMS choice and a notification mobile
+number distinct from the public business phone. Twilio sends a confirmation request to that mobile. A reply of `YES <code>` from that
 same number enables a daily, generic notification when customer messages are waiting. `STOP`
 withdraws consent. Google-listed phone numbers are never used as SMS recipients: a public phone
 listing is not SMS consent. Business profile verification and dashboard key issuance remain manual.

@@ -62,9 +62,12 @@
       <label for="phone">Business phone number</label>
       <input type="tel" id="phone" name="phone" placeholder="(555) 555-5555" autocomplete="tel" required>
 
+      <label for="smsPhone">Notification mobile number (if opting in)</label>
+      <input type="tel" id="smsPhone" name="smsPhone" placeholder="(555) 555-5555" autocomplete="mobile tel">
+
       <div class="sms-choice">
         <input type="checkbox" id="smsConsent" name="smsConsent">
-        <label for="smsConsent">I agree to receive VentText customer message notifications at the number above after I confirm by replying to a verification text. Message frequency varies; message and data rates may apply. Reply STOP to opt out or HELP for help. Consent is optional and is not required to create a profile. See <a href="terms.html">SMS Terms</a> and <a href="privacy.html">Privacy Policy</a>.</label>
+        <label for="smsConsent">I agree to receive VentText customer message notifications at the mobile number entered above after I confirm by replying to a verification text. Message frequency varies; message and data rates may apply. Reply STOP to opt out or HELP for help. Consent is optional and is not required to create a profile. See <a href="terms.html">SMS Terms</a> and <a href="privacy.html">Privacy Policy</a>.</label>
       </div>
 
       <label for="email">Email</label>
@@ -120,7 +123,8 @@
           contactPerson: document.getElementById('contactName').value.trim(),
           phone: document.getElementById('phone').value.trim(),
           email: document.getElementById('email').value.trim(),
-          smsConsent: document.getElementById('smsConsent').checked
+          smsConsent: document.getElementById('smsConsent').checked,
+          smsPhone: document.getElementById('smsPhone').value.trim()
         })
       });
       var result = await response.json();

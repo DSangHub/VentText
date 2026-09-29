@@ -39,14 +39,14 @@ export default async function handler(req, res) {
     if (/^STOP\s*$/i.test(body.trim())) {
       await db.query(
         `UPDATE merchants SET sms_confirmed_at = NULL, sms_opted_out_at = now()
-          WHERE phone = $1 AND sms_consent_at IS NOT NULL`, [fromNumber]
+          WHERE sms_phone = $1 AND sms_consent_at IS NOT NULL`, [fromNumber]
       );
       return res.status(200).set('Content-Type', 'text/xml').send('<Response></Response>');
     }
     if (/^START\s*$/i.test(body.trim())) {
       const restarted = await db.query(
         `UPDATE merchants SET sms_opted_out_at = NULL, sms_confirmed_at = now()
-          WHERE phone = $1 AND sms_consent_at IS NOT NULL AND sms_opted_out_at IS NOT NULL
+          WHERE sms_phone = $1 AND sms_consent_at IS NOT NULL AND sms_opted_out_at IS NOT NULL
           RETURNING id`, [fromNumber]
       );
       for (const merchant of restarted.rows) {
@@ -59,7 +59,7 @@ export default async function handler(req, res) {
     if (confirmation) {
       const updated = await db.query(
         `UPDATE merchants SET sms_confirmed_at = now(), sms_opted_out_at = NULL
-          WHERE phone = $1 AND merchant_code = $2 AND sms_consent_at IS NOT NULL
+          WHERE sms_phone = $1 AND merchant_code = $2 AND sms_consent_at IS NOT NULL
           RETURNING id`, [fromNumber, confirmation[1].toUpperCase()]
       );
       if (updated.rows.length) {
