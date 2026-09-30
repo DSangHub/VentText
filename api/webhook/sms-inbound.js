@@ -10,7 +10,7 @@
 import twilio from 'twilio';
 import { getDb } from '../_lib/db.js';
 import { sendSms } from '../_lib/twilio.js';
-import { resolveMerchant } from '../_lib/merchants.js';
+import { resolveMerchant, parseBusinessRequest } from '../_lib/merchants.js';
 import { checkRateLimit, scoreSeverity } from '../_lib/pipeline.js';
 import { newMessageEvent } from '../_lib/realtime.js';
 import { notifyMerchantIfSubscribed } from '../_lib/merchant-notifications.js';
@@ -84,21 +84,32 @@ export default async function handler(req, res) {
     //    first message resolves (or auto-seeds) the merchant.
     let resolved = null;
     const structured = /^\s*BUSINESS:/i.test(body);
+    let lookupProblem = null;
     try {
       if (structured) {
-        // A real Twilio sender may still repeat requests; cap paid Google lookups.
-        const recent = await db.query(
-          `SELECT count(*)::int AS count FROM messages m
-             JOIN conversations c ON c.id = m.conversation_id
-             JOIN customers cu ON cu.id = c.customer_id
-            WHERE cu.phone = $1 AND m.direction = 'inbound'
-              AND m.created_at > now() - interval '1 hour'`, [fromNumber]
-        );
-        if (recent.rows[0].count < 3) resolved = await resolveMerchant(db, body);
+        if (!parseBusinessRequest(body)) lookupProblem = 'format';
+        else if (!process.env.GOOGLE_PLACES_API_KEY) lookupProblem = 'unavailable';
+        else {
+          // Only BUSINESS requests consume paid Google lookups. General texts
+          // must not exhaust this budget before a customer provides details.
+          const recent = await db.query(
+            `SELECT count(*)::int AS count FROM messages m
+               JOIN conversations c ON c.id = m.conversation_id
+               JOIN customers cu ON cu.id = c.customer_id
+              WHERE cu.phone = $1 AND m.direction = 'inbound'
+                AND m.body ~* '^\\s*BUSINESS:'
+                AND m.created_at > now() - interval '1 hour'`, [fromNumber]
+          );
+          if (recent.rows[0].count >= 3) lookupProblem = 'rate_limit';
+          else resolved = await resolveMerchant(db, body);
+        }
       } else {
         resolved = await resolveMerchant(db, body);
       }
-    } catch (error) { console.error('Merchant lookup failed:', error); }
+    } catch (error) {
+      console.error('Merchant lookup failed:', error);
+      if (structured) lookupProblem = 'unavailable';
+    }
     const merchant = resolved ? resolved.merchant : null;
 
     // 4. Pick the conversation to append to.
@@ -141,7 +152,7 @@ export default async function handler(req, res) {
 
     // 8. Reply to the customer (unless rate-limited, to avoid a reply storm).
     if (!limited) {
-      await sendSms(fromNumber, ackMessage({ promptForCode, merchant, body }));
+      await sendSms(fromNumber, ackMessage({ promptForCode, merchant, body, lookupProblem }));
     }
 
     // 9. Twilio expects a response; empty TwiML is fine since we replied via the API.
@@ -230,10 +241,13 @@ async function selectConversation(db, customerId, merchant, forceUnassigned = fa
   return { conversationId: created.rows[0].id, merchantId: null, promptForCode: true };
 }
 
-function ackMessage({ promptForCode, merchant, body }) {
+function ackMessage({ promptForCode, merchant, body, lookupProblem }) {
   if (promptForCode) {
     if (/^\s*BUSINESS:/i.test(body)) {
-      return 'We saved your message but could not match that business. Please check the name and location, then text BUSINESS: Name | City, State | what happened.';
+      if (lookupProblem === 'unavailable') return 'We saved your text, but business lookup is temporarily unavailable. If you have the checkout business code, reply with it.';
+      if (lookupProblem === 'rate_limit') return 'We saved your text. Please wait before trying another business lookup, or reply with the checkout business code.';
+      if (lookupProblem === 'format') return 'We saved your text. Please reply like this: BUSINESS: Rosa\'s | Fresno, CA | Bad service at Blackstone and Shaw.';
+      return 'We saved your text but could not confidently identify that business location. Check the exact name and city, or reply with the checkout business code.';
     }
     return 'We saved your text but need the business to route it. Reply with the code shown at checkout, or text BUSINESS: Name | City, State | what happened.';
   }
