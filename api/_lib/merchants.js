@@ -13,6 +13,18 @@ import { findBusinessPlace } from './google-places.js';
 const CODE_RE = /^\s*([A-Za-z][A-Za-z0-9]{2,23})\s*(?:[-:|]\s*|\s+)([\s\S]*)$/;
 // Customer-supplied business details, never copied from Google Places content.
 const BUSINESS_RE = /^\s*BUSINESS:\s*([^|]{2,120})\s*\|\s*([^|]{2,160})\s*\|\s*([\s\S]{1,2000})$/i;
+const BUSINESS_PROSE_RE = /^\s*BUSINESS:\s*(.{2,120}?)\s+in\s+([a-z][a-z\s.'-]{2,60}?)\s*\.\s*(.{1,2000})$/i;
+
+export function parseBusinessRequest(body) {
+  if (typeof body !== 'string') return null;
+  const match = body.match(BUSINESS_RE) || body.match(BUSINESS_PROSE_RE);
+  if (!match) return null;
+  const [, rawName, rawLocation, rawComplaint] = match;
+  const name = rawName.trim();
+  const location = rawLocation.trim();
+  const complaint = rawComplaint.trim();
+  return name && location && complaint ? { name, location, complaint } : null;
+}
 
 /**
  * Pull a merchant code off the front of an inbound message body.
@@ -41,14 +53,13 @@ export function parseMerchantCode(body) {
  * Returns { merchant, autoSeeded } or null.
  */
 export async function resolveMerchant(db, body) {
-  const business = typeof body === 'string' && body.match(BUSINESS_RE);
+  const business = parseBusinessRequest(body);
   if (business) {
-    const name = business[1].trim();
-    const location = business[2].trim();
+    const { name, location } = business;
     const placeId = await findBusinessPlace(name, location);
     if (!placeId) return null;
     const found = await db.query('SELECT * FROM merchants WHERE google_place_id = $1', [placeId]);
-    if (found.rows.length) return { merchant: found.rows[0], autoSeeded: false, rest: business[3].trim() };
+    if (found.rows.length) return { merchant: found.rows[0], autoSeeded: false, rest: business.complaint };
     const code = 'VT' + randomBytes(8).toString('hex').toUpperCase();
     const seeded = await db.query(
       `INSERT INTO merchants (name, address, merchant_code, status, google_place_id)
@@ -57,7 +68,7 @@ export async function resolveMerchant(db, body) {
        RETURNING *`,
       [name, location, code, placeId]
     );
-    return { merchant: seeded.rows[0], autoSeeded: true, rest: business[3].trim() };
+    return { merchant: seeded.rows[0], autoSeeded: true, rest: business.complaint };
   }
   const parsed = parseMerchantCode(body);
   if (!parsed) return null;
