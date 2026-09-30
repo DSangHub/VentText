@@ -157,8 +157,8 @@ export default async function handler(req, res) {
  * Decide which conversation an inbound message belongs to.
  * - Known merchant: continue an open (customer, merchant) thread, or adopt an
  *   unassigned open thread (the customer was just prompted for a code), else start one.
- * - No merchant code: continue the customer's most recent open thread if any,
- *   otherwise open an unassigned thread and prompt them for the business code.
+ * - No merchant identified: keep an unassigned thread so a stray text cannot
+ *   be sent to a previously contacted business. Prompt for business details.
  */
 async function selectConversation(db, customerId, merchant, forceUnassigned = false) {
   if (merchant) {
@@ -201,7 +201,7 @@ async function selectConversation(db, customerId, merchant, forceUnassigned = fa
     return { conversationId: created.rows[0].id, merchantId: merchant.id, promptForCode: false };
   }
 
-  // No merchant code present — continue any open thread, else open an unassigned one.
+  // No merchant identified. Never infer a business from an earlier conversation.
   if (forceUnassigned) {
     const created = await db.query(
       `INSERT INTO conversations (customer_id, status) VALUES ($1, 'NEW') RETURNING id`,
@@ -210,16 +210,16 @@ async function selectConversation(db, customerId, merchant, forceUnassigned = fa
     return { conversationId: created.rows[0].id, merchantId: null, promptForCode: true };
   }
   const anyOpen = await db.query(
-    `SELECT id, merchant_id FROM conversations
-      WHERE customer_id = $1 AND status != 'RESOLVED'
+    `SELECT id FROM conversations
+      WHERE customer_id = $1 AND merchant_id IS NULL AND status != 'RESOLVED'
       ORDER BY created_at DESC LIMIT 1`,
     [customerId]
   );
   if (anyOpen.rows.length > 0) {
     return {
       conversationId: anyOpen.rows[0].id,
-      merchantId: anyOpen.rows[0].merchant_id,
-      promptForCode: false,
+      merchantId: null,
+      promptForCode: true,
     };
   }
 
@@ -235,7 +235,7 @@ function ackMessage({ promptForCode, merchant, body }) {
     if (/^\s*BUSINESS:/i.test(body)) {
       return 'We saved your message but could not match that business. Please check the name and location, then text BUSINESS: Name | City, State | what happened.';
     }
-    return 'Thanks for reaching out. Reply with the code shown at checkout, or text BUSINESS: Name | City, State | what happened.';
+    return 'We saved your text but need the business to route it. Reply with the code shown at checkout, or text BUSINESS: Name | City, State | what happened.';
   }
   if (merchant && merchant.status !== 'CLAIMED') {
     return "Got it — we've logged your message. The business can respond after it joins and verifies its profile.";
