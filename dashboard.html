@@ -57,6 +57,12 @@
   .gate input { width: 100%; background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
     border-radius: 8px; padding: 10px 12px; font-size: 14px; margin-bottom: 12px; }
   .gate .err { color: var(--danger); font-size: 13px; margin-bottom: 10px; min-height: 16px; }
+  .checkout { display:none; background:var(--panel); border-bottom:1px solid var(--line); padding:16px 20px; }
+  .checkout strong { font-size:20px; letter-spacing:.08em; }
+  .checkout p { color:var(--muted); font-size:13px; margin:6px 0; }
+  .checkout svg { background:white; max-width:180px; height:auto; padding:8px; }
+  .checkout button { border:1px solid var(--line); background:var(--panel-2); color:var(--text); padding:8px 12px; border-radius:6px; cursor:pointer; }
+  @media print { body > :not(#checkoutCard) { display:none!important; } #checkoutCard { display:block!important; color:black; background:white; border:0; text-align:center; font-size:18pt; } #checkoutCard p { color:black; } #checkoutCard svg { max-width:300px; } #checkoutCard button { display:none; } }
 </style>
 </head>
 <body>
@@ -77,6 +83,15 @@
     <button id="logoutBtn">Sign out</button>
   </header>
 
+  <section class="checkout" id="checkoutCard" aria-label="Checkout VentText code">
+    <h2>VentText checkout code</h2>
+    <strong id="checkoutCode"></strong>
+    <p>Put this code and QR at checkout or on your receipt. Customers scan with their phone camera, describe what happened, and send the prepared text.</p>
+    <div id="checkoutQr"></div>
+    <p id="checkoutUrl"></p>
+    <button type="button" onclick="window.print()">Print checkout sign</button>
+  </section>
+
   <div class="layout">
     <div class="list" id="list"></div>
     <div class="thread">
@@ -91,6 +106,7 @@
     </div>
   </div>
 
+<script src="vendor/qrcode.js"></script>
 <script>
 // Merchant dashboard client. Talks to the /api/merchant/* endpoints using the
 // merchant's API key as a Bearer token. Live updates via polling (no config
@@ -132,6 +148,18 @@ async function loadInbox() {
   try { data = await api('/api/merchant/conversations'); } catch { return; }
   document.getElementById('merchantMeta').textContent =
     data.merchant.name + ' · ' + data.merchant.status;
+  const code = data.merchant.merchant_code || '';
+  if (/^[A-Z][A-Z0-9]{2,23}$/.test(code)) {
+    const url = new URL('/report.html', location.origin);
+    url.searchParams.set('code', code);
+    document.getElementById('checkoutCode').textContent = code;
+    document.getElementById('checkoutUrl').textContent = url.href;
+    const qr = qrcode(0, 'M');
+    qr.addData(url.href);
+    qr.make();
+    document.getElementById('checkoutQr').innerHTML = qr.createSvgTag({ cellSize: 5, margin: 4, scalable: true });
+    document.getElementById('checkoutCard').style.display = 'block';
+  }
   const list = document.getElementById('list');
   if (!data.conversations.length) {
     list.innerHTML = '<div class="empty">No open complaints. 🎉</div>';

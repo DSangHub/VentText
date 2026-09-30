@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Report an experience — VentText</title>
+<link rel="stylesheet" href="styles.css">
+<style>
+  .report { max-width: 620px; margin: 0 auto; padding: 52px 24px 80px; }
+  .report h1 { font-family: var(--mono); font-size: 2rem; }
+  .report p { line-height: 1.5; }
+  .report-card { background: var(--paper-100); color: var(--paper-ink); border-radius: 14px; padding: 24px; margin-top: 24px; }
+  .report-card label { display:block; font-weight:700; margin:18px 0 8px; }
+  .report-card input, .report-card textarea { width:100%; box-sizing:border-box; padding:12px; border:1px solid #aaa; border-radius:8px; background:white; color:#17202a; font:inherit; }
+  .report-card textarea { min-height:120px; resize:vertical; }
+  .report-card button { width:100%; margin-top:18px; padding:13px; border:0; border-radius:8px; background:var(--stamp-red); color:white; font:inherit; font-weight:700; cursor:pointer; }
+  .report-card button:disabled { opacity:.5; cursor:not-allowed; }
+  .report-card .help { color:var(--ink-700); font-size:.9rem; }
+  .report-card .error { color:#a22920; font-weight:700; min-height:1.5em; }
+</style>
+</head>
+<body>
+<nav class="nav"><div class="nav-inner"><div class="logo"><span class="dot"></span>VentText</div><div class="nav-links"><a href="index.html">Home</a><a href="how-it-works.html">How It Works</a><a href="merchant-signup.html">For Businesses</a></div></div></nav>
+<main class="report">
+  <h1>Text about your visit</h1>
+  <p>Scan the business's VentText QR code at checkout with your phone camera. It opens this page with the business code filled in. You can also type the code printed beside the QR.</p>
+  <div class="report-card">
+    <form id="reportForm">
+      <label for="code">Checkout business code</label>
+      <input id="code" name="code" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="For example, VT1234…" maxlength="24" required>
+      <p class="help">Use the VentText code shown by the business. An ordinary receipt without that code cannot identify the business automatically.</p>
+      <label for="complaint">What happened?</label>
+      <textarea id="complaint" name="complaint" maxlength="1600" required placeholder="Tell the business about your experience"></textarea>
+      <p id="error" class="error" role="alert"></p>
+      <button type="submit">Open text message</button>
+      <p class="help">Your phone will open a prepared SMS. Press Send there to submit it. Nothing is sent from this page.</p>
+    </form>
+  </div>
+  <p>No VentText checkout code? Text <strong>BUSINESS: Name | City, State | What happened</strong> to <a href="sms:+15595505388">+1 (559) 550-5388</a>. We route only a confident business match.</p>
+</main>
+<footer><div class="wrap footer-inner"><div>© 2026 VentText — a service of Lazy Man Ventures LLC.</div><div class="footer-links"><a href="privacy.html">Privacy</a><a href="terms.html">SMS Terms</a></div></div></footer>
+<script>
+  const input = document.getElementById('code');
+  const fromQr = new URLSearchParams(location.search).get('code') || '';
+  if (/^[a-z][a-z0-9]{2,23}$/i.test(fromQr)) input.value = fromQr.toUpperCase();
+  document.getElementById('reportForm').addEventListener('submit', event => {
+    event.preventDefault();
+    const code = input.value.trim().toUpperCase();
+    const complaint = document.getElementById('complaint').value.trim();
+    const error = document.getElementById('error');
+    if (!/^[A-Z][A-Z0-9]{2,23}$/.test(code)) {
+      error.textContent = 'Enter the letters and numbers of the VentText checkout code.';
+      return;
+    }
+    if (!complaint) { error.textContent = 'Tell us what happened first.'; return; }
+    error.textContent = '';
+    window.location.href = 'sms:+15595505388?&body=' + encodeURIComponent(code + ' - ' + complaint);
+  });
+</script>
+</body>
+</html>
