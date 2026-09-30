@@ -41,7 +41,7 @@ export default async function handler(req, res) {
     );
 
     return res.status(200).json({
-      merchant: { id: merchant.id, name: merchant.name, status: merchant.status },
+      merchant: { id: merchant.id, name: merchant.name, status: merchant.status, merchant_code: merchant.merchant_code },
       conversations: rows.rows,
     });
   } catch (err) {
