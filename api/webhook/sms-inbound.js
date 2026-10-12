@@ -14,6 +14,7 @@ import { resolveMerchant, parseBusinessRequest } from '../_lib/merchants.js';
 import { checkRateLimit, scoreSeverity } from '../_lib/pipeline.js';
 import { newMessageEvent } from '../_lib/realtime.js';
 import { notifyMerchantIfSubscribed } from '../_lib/merchant-notifications.js';
+import { processReceipt, parseReceiptConfirmation, confirmReceipt } from '../_lib/receipt-flow.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
@@ -34,6 +35,11 @@ export default async function handler(req, res) {
   const db = getDb();
 
   try {
+    // Twilio retries must not re-run receipt OCR or send a second prompt.
+    const duplicate = await db.query(
+      "SELECT id FROM messages WHERE twilio_sid=$1 AND direction='inbound' LIMIT 1", [sid]
+    );
+    if (duplicate.rows.length) return res.status(200).set('Content-Type', 'text/xml').send('<Response></Response>');
     // A business confirms the number it entered on the signup form by replying
     // from that number. STOP withdraws its notification consent.
     if (/^STOP\s*$/i.test(body.trim())) {
@@ -80,6 +86,17 @@ export default async function handler(req, res) {
     }
     const customerId = customer.rows[0].id;
 
+    const receiptConfirmation = parseReceiptConfirmation(body);
+    if (receiptConfirmation) {
+      const result = await confirmReceipt(db, { customerId, confirmation: receiptConfirmation, body, messageSid: sid });
+      if (result.notify && result.merchantId) {
+        try { await notifyMerchantIfSubscribed(db, result.merchantId); }
+        catch (error) { console.error('Receipt merchant notice failed:', error); }
+      }
+      if (result.reply) await sendReceiptReply(db, fromNumber, result.reply, result.conversationId);
+      return res.status(200).set('Content-Type', 'text/xml').send('<Response></Response>');
+    }
+
     // 3. Identify which merchant this is for (Option B). A merchant code on the
     //    first message resolves (or auto-seeds) the merchant.
     let resolved = null;
@@ -120,10 +137,11 @@ export default async function handler(req, res) {
     const complaintText = resolved && resolved.rest ? resolved.rest : body;
     const inserted = await db.query(
       `INSERT INTO messages (conversation_id, direction, sender, body, media_url, twilio_sid)
-       VALUES ($1, 'inbound', 'customer', $2, $3, $4)
+       VALUES ($1, 'inbound', 'customer', $2, $3, $4) ON CONFLICT DO NOTHING
        RETURNING id, created_at`,
-      [conversationId, body, mediaUrl, sid]
+      [conversationId, body || (mediaUrl ? 'Receipt photo' : ''), mediaUrl, sid]
     );
+    if (!inserted.rows.length) return res.status(200).set('Content-Type', 'text/xml').send('<Response></Response>');
 
     // 6. Pipeline: severity scoring + rate limiting.
     const severity = scoreSeverity(complaintText);
@@ -134,6 +152,18 @@ export default async function handler(req, res) {
       [conversationId, severity]
     );
     const { limited } = await checkRateLimit(db, conversationId);
+    let receiptReply = null;
+    if (mediaUrl && !limited) {
+      await db.query("UPDATE conversations SET receipt_source='photo' WHERE id=$1", [conversationId]);
+      if (!merchantId) {
+        receiptReply = await processReceipt(db, {
+          customerId, messageId: inserted.rows[0].id, mediaUrl,
+          messageSid: sid, contentType: req.body.MediaContentType0,
+        });
+      } else {
+        receiptReply = 'Your receipt photo is saved with this business conversation for review. Reading a photo does not verify the purchase.';
+      }
+    }
 
     // 7. Real-time push so a subscribed merchant dashboard updates live.
     if (merchantId) {
@@ -152,7 +182,8 @@ export default async function handler(req, res) {
 
     // 8. Reply to the customer (unless rate-limited, to avoid a reply storm).
     if (!limited) {
-      await sendSms(fromNumber, ackMessage({ promptForCode, merchant, body, lookupProblem }));
+      if (receiptReply) await sendReceiptReply(db, fromNumber, receiptReply, conversationId);
+      else await sendSms(fromNumber, ackMessage({ promptForCode, merchant, body, lookupProblem }));
     }
 
     // 9. Twilio expects a response; empty TwiML is fine since we replied via the API.
@@ -162,6 +193,14 @@ export default async function handler(req, res) {
     console.error('Inbound webhook error:', err);
     return res.status(500).send('Internal error');
   }
+}
+
+async function sendReceiptReply(db, phone, body, conversationId) {
+  const sent = await sendSms(phone, body);
+  if (conversationId) await db.query(
+    `INSERT INTO messages (conversation_id,direction,sender,body,twilio_sid)
+     VALUES ($1,'outbound','system',$2,$3)`, [conversationId, body, sent.sid]
+  );
 }
 
 /**

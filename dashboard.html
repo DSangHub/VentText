@@ -123,6 +123,7 @@ const store = {
 let _mem = null;
 let activeId = null;
 let pollTimer = null;
+let receiptUrls = [];
 
 function authHeaders() { return { 'Authorization': 'Bearer ' + store.key }; }
 
@@ -192,12 +193,35 @@ async function openThread(id) {
     <div class="sub">${c.status}${c.severity_score != null ? ' · severity ' + c.severity_score : ''}
     ${c.response_deadline ? ' · due ' + fmtTime(c.response_deadline) : ''}</div>`;
   const box = document.getElementById('messages');
+  receiptUrls.forEach(url => URL.revokeObjectURL(url));
+  receiptUrls = [];
   box.innerHTML = data.messages.map(m => `
     <div class="bubble ${m.direction}">
       ${escapeHtml(m.body || '')}
+      ${m.receipt_business ? `<div style="font-size:12px;margin-top:8px">Receipt: ${escapeHtml(m.receipt_business.code || [m.receipt_business.name,m.receipt_business.address].filter(Boolean).join(', '))} · ${escapeHtml(m.receipt_read_status || '')}</div>` : ''}
+      ${m.media_url ? `<div><button type="button" class="receipt-load" data-message-id="${m.id}">View receipt photo</button></div>` : ''}
       <span class="ts">${m.sender} · ${fmtTime(m.created_at)}${m.status ? ' · ' + m.status : ''}</span>
     </div>`).join('') || '<div class="empty">No messages yet.</div>';
   box.scrollTop = box.scrollHeight;
+  box.querySelectorAll('.receipt-load').forEach(button => button.addEventListener('click', async () => {
+    button.disabled = true;
+    button.textContent = 'Loading receipt…';
+    try {
+      const response = await fetch('/api/merchant/receipt?messageId=' + encodeURIComponent(button.dataset.messageId), { headers: authHeaders() });
+      if (!response.ok) throw new Error('Photo unavailable');
+      if (activeId !== id || !button.isConnected) return;
+      const url = URL.createObjectURL(await response.blob());
+      receiptUrls.push(url);
+      const image = document.createElement('img');
+      image.src = url;
+      image.alt = 'Customer receipt photo';
+      image.style.cssText = 'display:block;max-width:100%;max-height:480px;margin-top:10px';
+      button.replaceWith(image);
+    } catch {
+      button.textContent = 'Photo unavailable — retry';
+      button.disabled = false;
+    }
+  }));
   document.getElementById('composer').style.display = 'flex';
 }
 
@@ -242,6 +266,8 @@ function signIn(key) {
   startPolling();
 }
 function signOut(msg) {
+  receiptUrls.forEach(url => URL.revokeObjectURL(url));
+  receiptUrls = [];
   clearInterval(pollTimer);
   store.key = null;
   activeId = null;

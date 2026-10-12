@@ -153,6 +153,18 @@ UPDATE merchants
 - **SLA escalation job** — `response_deadline` is set on each conversation, but nothing yet fires the overdue-escalation text; add a cron/background job.
 - **Full merchant auth/login** — the API-key scheme is real but minimal; swap `auth.js` for a session/login system when you build merchant accounts. The claim/verification flow (SMS/email code) from the claim-flow doc still needs building.
 
+## Receipt photo reading (Google Cloud Vision)
+
+Enable **Cloud Vision API** with billing in the Google Cloud project. Add a server-only Production secret `GOOGLE_VISION_API_KEY` restricted to Cloud Vision API, then redeploy. The reader can alternatively reuse `GOOGLE_PLACES_API_KEY` if its Google API restrictions allow both Cloud Vision API and Places API (New). A Places-only key cannot call OCR.
+
+Apply `migrations/005_receipt_reading.sql` to the private `venttext` schema before deploying. It adds only receipt-derived business details/status on messages and prevents duplicate inbound Twilio SIDs. The existing app role needs its existing SELECT/INSERT/UPDATE grants on messages and conversations.
+
+The customer sends a JPEG, PNG, or WebP photo under 5 MB to the VentText number with the complaint as a caption. The server authenticates the Twilio webhook, downloads only media belonging to that signed message from `api.twilio.com`, and runs `DOCUMENT_TEXT_DETECTION`. It keeps only a likely business name/address or explicitly labeled VentText code, never the full OCR text or payment data. There is a 3-photo/hour reading limit per sender.
+
+The customer receives a confirmation such as `YES RECEIPT A1B2C3D4`, valid for 24 hours and only from the sender's phone. They can add ` - what happened`. After confirmation, Google Places must find one exact business/location match, or the OCR code must match an existing merchant. Uncertain results stay unassigned. This does **not** set `receipt_verified` or authorize a coupon. Unclaimed businesses still must join and verify; SMS notices still require confirmed opt-in.
+
+Authenticated merchants can view receipt-derived details and load their own receipt photos from `/api/merchant/receipt`. Twilio credentials remain on the server. Dashboard photo viewing supports images up to 4 MB. OCR/provider failures leave the image saved and return a clear text fallback.
+
 ## Google business matching and merchant SMS notifications
 
 Apply `migrations/003_google_business_notifications.sql` to the production VentText schema, then set
