@@ -54,6 +54,8 @@ CREATE TABLE messages (
   sender TEXT NOT NULL,      -- 'customer' | 'merchant' | 'system'
   body TEXT,
   media_url TEXT,
+  receipt_read_status TEXT,    -- needs_confirmation | confirmed | unreadable | unavailable
+  receipt_business JSONB,     -- receipt-derived name/address or labeled VentText code; no full OCR text
   twilio_sid TEXT,
   status TEXT,               -- delivery status from Twilio callback
   created_at TIMESTAMPTZ DEFAULT now()
@@ -62,6 +64,8 @@ CREATE TABLE messages (
 CREATE INDEX idx_conversations_merchant ON conversations(merchant_id);
 CREATE INDEX idx_conversations_customer ON conversations(customer_id);
 CREATE INDEX idx_messages_conversation ON messages(conversation_id);
+CREATE UNIQUE INDEX idx_messages_inbound_twilio_sid ON messages(twilio_sid)
+  WHERE direction='inbound' AND twilio_sid IS NOT NULL;
 CREATE INDEX idx_customers_phone ON customers(phone);
 CREATE INDEX idx_merchants_code ON merchants(merchant_code);
 CREATE INDEX idx_merchants_api_key ON merchants(api_key);

@@ -33,7 +33,8 @@ export default async function handler(req, res) {
     }
 
     const messages = await db.query(
-      `SELECT id, direction, sender, body, media_url, status, twilio_sid, created_at
+      `SELECT id, direction, sender, body, media_url, status, twilio_sid, created_at,
+              receipt_read_status, receipt_business
          FROM messages
         WHERE conversation_id = $1
         ORDER BY created_at ASC`,
