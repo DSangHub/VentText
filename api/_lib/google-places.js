@@ -26,3 +26,16 @@ export async function findBusinessPlace(name, location, fetcher = fetch) {
   // Never guess between similarly named locations.
   return matches.length === 1 ? matches[0].id : null;
 }
+
+// Compare temporarily with an applicant-supplied number; never retain Places content.
+export async function matchesListedPhone(placeId, phone, fetcher = fetch) {
+  const key = process.env.GOOGLE_PLACES_API_KEY;
+  if (!key || !placeId) return false;
+  const response = await fetcher('https://places.googleapis.com/v1/places/' + encodeURIComponent(placeId), {
+    headers: { 'X-Goog-Api-Key': key, 'X-Goog-FieldMask':'internationalPhoneNumber' },
+    signal: AbortSignal.timeout(5000),
+  });
+  if (!response.ok) throw new Error(`Google phone lookup returned ${response.status}`);
+  const place = await response.json();
+  return String(place.internationalPhoneNumber || '').replace(/\D/g,'') === phone.replace(/\D/g,'');
+}

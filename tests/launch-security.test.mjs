@@ -8,7 +8,7 @@ const token='test-signature-secret';
 const base='https://example.test';
 process.env.TWILIO_AUTH_TOKEN=token;
 process.env.PUBLIC_BASE_URL=base;
-const response=()=>({status(code){this.code=code;return this;},send(body){this.body=body;return this;},json(body){this.body=body;return this;},end(){return this;}});
+const response=()=>({setHeader(){return this;},status(code){this.code=code;return this;},send(body){this.body=body;return this;},json(body){this.body=body;return this;},end(){return this;}});
 const source=async(path)=>(await readFile(new URL('../'+path,import.meta.url),'utf8')).replace(/^import .*;\n/gm,'').replace('export default async function handler','async function handler');
 
 test('unsigned status callback cannot mutate delivery records',async()=>{

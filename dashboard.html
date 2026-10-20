@@ -69,10 +69,9 @@
   <div class="gate" id="gate">
     <div class="card">
       <h2>Business sign in</h2>
-      <p>Enter the dashboard key supplied after your business is verified. New business? <a href="merchant-signup.html" style="color:var(--accent)">Sign up</a>.</p>
-      <div class="err" id="gateErr"></div>
-      <input id="apiKeyInput" type="password" placeholder="vt_live_..." autocomplete="off" />
-      <button id="gateBtn">Sign in</button>
+      <p>Sign in with your business email and password. Verify your business phone to connect an inbox.</p>
+      <div class="err" id="gateErr" role="status"></div>
+      <a href="/merchant-signup.html" style="color:var(--accent)">Business sign up / sign in →</a>
     </div>
   </div>
 
@@ -107,32 +106,28 @@
   </div>
 
 <script src="vendor/qrcode.js"></script>
-<script>
+<script type="module">
 // Merchant dashboard client. Talks to the /api/merchant/* endpoints using the
 // merchant's API key as a Bearer token. Live updates via polling (no config
 // needed); wire Pusher in here if you want instant push.
-const store = {
-  get key() {
-    try { return localStorage.getItem('vt_api_key') || _mem; } catch { return _mem; }
-  },
-  set key(v) {
-    _mem = v;
-    try { if (v) localStorage.setItem('vt_api_key', v); else localStorage.removeItem('vt_api_key'); } catch {}
-  }
-};
-let _mem = null;
+import { businessAuth, businessToken } from './vendor/business-session.js';
+let accessToken = null;
+let authEpoch = 0;
 let activeId = null;
 let pollTimer = null;
 let receiptUrls = [];
 
-function authHeaders() { return { 'Authorization': 'Bearer ' + store.key }; }
+function authHeaders() { return { 'Authorization': 'Bearer ' + accessToken }; }
 
 async function api(path, opts = {}) {
+  const epoch = authEpoch;
+  accessToken = await businessToken();
   const res = await fetch(path, {
     ...opts,
     headers: { 'Content-Type': 'application/json', ...authHeaders(), ...(opts.headers || {}) },
   });
-  if (res.status === 401) { signOut('Invalid or expired API key.'); throw new Error('unauthorized'); }
+  if (epoch !== authEpoch) throw new Error('Session changed');
+  if (res.status === 401) { signOut('Sign in again, or finish business verification.'); throw new Error('unauthorized'); }
   if (!res.ok) throw new Error('Request failed: ' + res.status);
   return res.json();
 }
@@ -207,6 +202,7 @@ async function openThread(id) {
     button.disabled = true;
     button.textContent = 'Loading receipt…';
     try {
+      accessToken = await businessToken();
       const response = await fetch('/api/merchant/receipt?messageId=' + encodeURIComponent(button.dataset.messageId), { headers: authHeaders() });
       if (!response.ok) throw new Error('Photo unavailable');
       if (activeId !== id || !button.isConnected) return;
@@ -259,30 +255,34 @@ function startPolling() {
   }, 10000);
 }
 
-function signIn(key) {
-  store.key = key;
-  document.getElementById('gate').style.display = 'none';
-  loadInbox();
-  startPolling();
+async function signIn() {
+  try {
+    accessToken=await businessToken();
+    if (!accessToken) return;
+    const account=await api('/api/merchant/account');
+    if (account.merchant?.status !== 'CLAIMED') {
+      document.getElementById('gateErr').textContent='Finish business phone verification to connect your inbox.';
+      return;
+    }
+    document.getElementById('gate').style.display='none';
+    await loadInbox();startPolling();
+  } catch { document.getElementById('gateErr').textContent='Could not open your account. Sign in or try again.'; }
 }
-function signOut(msg) {
-  receiptUrls.forEach(url => URL.revokeObjectURL(url));
-  receiptUrls = [];
-  clearInterval(pollTimer);
-  store.key = null;
-  activeId = null;
-  document.getElementById('gate').style.display = 'flex';
-  document.getElementById('gateErr').textContent = msg || '';
+async function signOut(msg) {
+  authEpoch++;
+  receiptUrls.forEach(url => URL.revokeObjectURL(url));receiptUrls=[];
+  clearInterval(pollTimer);accessToken=null;activeId=null;
+  document.getElementById('checkoutCard').style.display='none';
+  document.getElementById('list').replaceChildren();
+  document.getElementById('messages').replaceChildren();
+  document.getElementById('threadHead').replaceChildren();
+  document.getElementById('composer').style.display='none';
+  document.getElementById('gate').style.display='flex';
+  document.getElementById('gateErr').textContent=msg || 'Signed out.';
+  await businessAuth.signOut();
 }
 
 // Wiring
-document.getElementById('gateBtn').addEventListener('click', () => {
-  const v = document.getElementById('apiKeyInput').value.trim();
-  if (v) signIn(v);
-});
-document.getElementById('apiKeyInput').addEventListener('keydown', e => {
-  if (e.key === 'Enter') document.getElementById('gateBtn').click();
-});
 document.getElementById('sendBtn').addEventListener('click', sendReply);
 document.getElementById('replyInput').addEventListener('keydown', e => {
   if (e.key === 'Enter') sendReply();
@@ -292,8 +292,9 @@ document.getElementById('refreshBtn').addEventListener('click', () => {
 });
 document.getElementById('logoutBtn').addEventListener('click', () => signOut());
 
-// Auto-open if a key was saved from a prior session.
-if (store.key) signIn(store.key);
+// Sessions refresh through Supabase; dashboard keys are no longer entered here.
+try { localStorage.removeItem('vt_api_key'); } catch {}
+signIn();
 </script>
 </body>
 </html>

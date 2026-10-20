@@ -7,6 +7,7 @@ import { getDb } from '../_lib/db.js';
 import { authenticateMerchant } from '../_lib/auth.js';
 
 export default async function handler(req, res) {
+  res.setHeader('Cache-Control', 'no-store');
   if (req.method !== 'GET') return res.status(405).end();
 
   const db = getDb();

@@ -12,6 +12,7 @@
 // endpoint goes through it.
 
 import { getMerchantByApiKey } from './merchants.js';
+import { authenticatedBusinessUser } from './business-auth.js';
 
 /** Extract the Bearer token from an incoming request, or null. */
 export function getBearerToken(req) {
@@ -31,6 +32,12 @@ export async function authenticateMerchant(req, db) {
   if (!token) return null;
   // A formerly documented demo credential must never authorize production.
   if (token === 'vt_live_demo_change_me') return null;
+  if (token.split('.').length === 3) {
+    const user = await authenticatedBusinessUser(req);
+    if (!user) return null;
+    const result = await db.query("SELECT * FROM merchants WHERE owner_auth_user_id=$1 AND status='CLAIMED'", [user.id]);
+    return result.rows[0] || null;
+  }
   const merchant = await getMerchantByApiKey(db, token);
   if (!merchant) return null;
   if (merchant.status !== 'CLAIMED') return null;
