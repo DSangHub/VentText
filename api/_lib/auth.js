@@ -29,6 +29,8 @@ export function getBearerToken(req) {
 export async function authenticateMerchant(req, db) {
   const token = getBearerToken(req);
   if (!token) return null;
+  // A formerly documented demo credential must never authorize production.
+  if (token === 'vt_live_demo_change_me') return null;
   const merchant = await getMerchantByApiKey(db, token);
   if (!merchant) return null;
   if (merchant.status !== 'CLAIMED') return null;

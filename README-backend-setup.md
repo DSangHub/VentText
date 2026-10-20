@@ -118,14 +118,9 @@ If nothing happens, check the Vercel **Logs** tab — the most common first-run 
 
 ## Step 6 — Log into the merchant dashboard
 
-Open `https://venttext.com/dashboard.html` and enter a merchant's **API key**. If you ran the migration, a demo merchant exists:
+Open `https://venttext.com/dashboard.html` and enter the unique API key issued after manual business verification. No shared demo key may be used in production. The formerly documented demo credential has been revoked and is rejected by the API.
 
-```
-code:    MARIO123
-api_key: vt_live_demo_change_me   ← change this before production
-```
-
-You'll see the inbox of open complaints, can open a thread, and reply — each reply goes out as an SMS to the customer from your VentText number. The dashboard polls every 10 seconds; set the `PUSHER_*` vars for instant push instead.
+You'll see the inbox of open complaints, can open a thread, and reply — each reply goes out as an SMS to the customer from your VentText number. The dashboard polls every 10 seconds. Pusher events use private channels; private subscription authentication must be implemented before adding a browser Pusher subscriber.
 
 Issue a real API key per merchant when they claim their business, e.g.:
 

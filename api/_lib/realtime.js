@@ -8,8 +8,8 @@
 //
 // To turn it on: create a free Pusher Channels app and set
 //   PUSHER_APP_ID, PUSHER_KEY, PUSHER_SECRET, PUSHER_CLUSTER
-// The dashboard subscribes to the channel `merchant-<merchantId>` and listens
-// for the `new-message` event.
+// Private channels require server-authorized subscriptions. The current
+// dashboard uses authenticated polling; never expose complaints on public channels.
 
 let pusherClient;
 let triedInit = false;
@@ -49,10 +49,9 @@ export async function publish(merchantId, event, data) {
   try {
     const client = await getPusher();
     if (!client) {
-      console.log(`[realtime] (no-op) merchant-${merchantId} ${event}`, data);
       return;
     }
-    await client.trigger(`merchant-${merchantId}`, event, data);
+    await client.trigger(`private-merchant-${merchantId}`, event, data);
   } catch (err) {
     console.warn('Realtime publish failed (non-fatal):', err.message);
   }
