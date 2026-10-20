@@ -167,13 +167,13 @@ async function loadInbox() {
     return;
   }
   list.innerHTML = data.conversations.map(c => `
-    <div class="convo ${c.id === activeId ? 'active' : ''}" data-id="${c.id}">
+    <div class="convo ${c.id === activeId ? 'active' : ''}" data-id="${escapeHtml(c.id)}">
       <div class="top">
-        <span class="phone">${c.customer_name || c.customer_phone}</span>
+        <span class="phone">${escapeHtml(c.customer_name || c.customer_phone)}</span>
         ${c.severity_score != null ? `<span class="pill ${sevClass(c.severity_score)}">sev ${c.severity_score}</span>` : ''}
       </div>
       <div class="preview">${escapeHtml(c.last_message || '')}</div>
-      <div class="preview" style="font-size:11px">${c.status} · ${fmtTime(c.last_message_at || c.created_at)}</div>
+      <div class="preview" style="font-size:11px">${escapeHtml(c.status)} · ${fmtTime(c.last_message_at || c.created_at)}</div>
     </div>`).join('');
   list.querySelectorAll('.convo').forEach(el =>
     el.addEventListener('click', () => openThread(el.dataset.id)));
@@ -189,18 +189,18 @@ async function openThread(id) {
   const head = document.getElementById('threadHead');
   head.style.display = 'block';
   const c = data.conversation;
-  head.innerHTML = `<div class="who">${c.customer_name || c.customer_phone}</div>
-    <div class="sub">${c.status}${c.severity_score != null ? ' · severity ' + c.severity_score : ''}
+  head.innerHTML = `<div class="who">${escapeHtml(c.customer_name || c.customer_phone)}</div>
+    <div class="sub">${escapeHtml(c.status)}${c.severity_score != null ? ' · severity ' + Number(c.severity_score) : ''}
     ${c.response_deadline ? ' · due ' + fmtTime(c.response_deadline) : ''}</div>`;
   const box = document.getElementById('messages');
   receiptUrls.forEach(url => URL.revokeObjectURL(url));
   receiptUrls = [];
   box.innerHTML = data.messages.map(m => `
-    <div class="bubble ${m.direction}">
+    <div class="bubble ${m.direction === 'outbound' ? 'outbound' : 'inbound'}">
       ${escapeHtml(m.body || '')}
       ${m.receipt_business ? `<div style="font-size:12px;margin-top:8px">Receipt: ${escapeHtml(m.receipt_business.code || [m.receipt_business.name,m.receipt_business.address].filter(Boolean).join(', '))} · ${escapeHtml(m.receipt_read_status || '')}</div>` : ''}
-      ${m.media_url ? `<div><button type="button" class="receipt-load" data-message-id="${m.id}">View receipt photo</button></div>` : ''}
-      <span class="ts">${m.sender} · ${fmtTime(m.created_at)}${m.status ? ' · ' + m.status : ''}</span>
+      ${m.media_url ? `<div><button type="button" class="receipt-load" data-message-id="${escapeHtml(m.id)}">View receipt photo</button></div>` : ''}
+      <span class="ts">${escapeHtml(m.sender)} · ${fmtTime(m.created_at)}${m.status ? ' · ' + escapeHtml(m.status) : ''}</span>
     </div>`).join('') || '<div class="empty">No messages yet.</div>';
   box.scrollTop = box.scrollHeight;
   box.querySelectorAll('.receipt-load').forEach(button => button.addEventListener('click', async () => {

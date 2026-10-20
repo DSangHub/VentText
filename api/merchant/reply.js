@@ -18,8 +18,9 @@ export default async function handler(req, res) {
   if (!merchant) return res.status(401).json({ error: 'Unauthorized' });
 
   const { conversationId, message } = req.body || {};
-  if (!conversationId || !message) {
-    return res.status(400).json({ error: 'conversationId and message are required' });
+  if (typeof conversationId !== 'string' || !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(conversationId) ||
+      typeof message !== 'string' || !message.trim() || message.length > 1600) {
+    return res.status(400).json({ error: 'Enter a valid conversation and a message of 1–1600 characters.' });
   }
 
   try {
