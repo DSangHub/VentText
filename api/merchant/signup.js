@@ -1,78 +1,49 @@
-import { randomBytes } from 'node:crypto';
 import { getDb } from '../../db.js';
-import { findBusinessPlace } from '../_lib/google-places.js';
-import { sendSms } from '../_lib/twilio.js';
+import { authenticatedBusinessUser } from '../_lib/business-auth.js';
+import { businessProfile, newChallenge, reserveVerification } from '../_lib/business-claims.js';
+import { findBusinessPlace, matchesListedPhone } from '../_lib/google-places.js';
+import { sendSms, twilioClient } from '../_lib/twilio.js';
 
-function usMobileNumber(value) {
-  const digits = value.replace(/\D/g, '');
-  if (digits.length === 10) return '+1' + digits;
-  if (digits.length === 11 && digits.startsWith('1')) return '+' + digits;
-  return null;
-}
-
-export default async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-  const { name, address, contactPerson, phone, email, smsConsent, smsPhone } = req.body || {};
-  const fields = [name, address, contactPerson, phone, email];
-  if (fields.some(value => typeof value !== 'string' || !value.trim() || value.length > 255) ||
-      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !/^[+\d()\s.-]{7,25}$/.test(phone)) {
-    return res.status(400).json({ error: 'Enter a valid business name, address, contact person, phone number, and email.' });
-  }
-  const normalizedPhone = usMobileNumber(phone);
-  if (!normalizedPhone) return res.status(400).json({ error: 'Enter a valid US phone number.' });
-  const notificationPhone = smsConsent === true && typeof smsPhone === 'string'
-    ? usMobileNumber(smsPhone) : null;
-  if (smsConsent === true && !notificationPhone) {
-    return res.status(400).json({ error: 'Enter a valid US mobile number for SMS notifications.' });
-  }
+export default async function handler(req,res) {
+  res.setHeader('Cache-Control','no-store');
+  if (req.method !== 'POST') return res.status(405).json({error:'Method not allowed'});
   try {
-    const code = 'VT' + randomBytes(8).toString('hex').toUpperCase();
-    const db = getDb();
-    let placeId = null;
-    try { placeId = await findBusinessPlace(name.trim(), address.trim()); }
-    catch (error) { console.error('Signup place lookup failed:', error); }
-    const values = [name.trim(), address.trim(), contactPerson.trim(), normalizedPhone,
-      email.trim().toLowerCase(), code, smsConsent === true, placeId, notificationPhone];
-    let saved;
-    if (placeId) {
-      saved = await db.query(
-        `INSERT INTO merchants (name, address, contact_person, phone, email, merchant_code, status,
-                                sms_consent_at, sms_consent_source, google_place_id, sms_phone)
-         VALUES ($1,$2,$3,$4,$5,$6,'PENDING', CASE WHEN $7 THEN now() END,
-                 CASE WHEN $7 THEN 'merchant_signup' END,$8,$9)
-         ON CONFLICT (google_place_id) DO UPDATE SET
-           name = EXCLUDED.name, address = EXCLUDED.address, contact_person = EXCLUDED.contact_person,
-           phone = EXCLUDED.phone, sms_phone = EXCLUDED.sms_phone,
-           email = EXCLUDED.email, status = 'PENDING',
-           sms_consent_at = EXCLUDED.sms_consent_at, sms_consent_source = EXCLUDED.sms_consent_source,
-           sms_confirmed_at = NULL, sms_opted_out_at = NULL
-         WHERE merchants.status = 'UNCLAIMED'
-         RETURNING merchant_code`, values
-      );
-      if (!saved.rows.length) return res.status(409).json({ error: 'This business already has a profile. Contact VentText for help.' });
-    } else {
-      saved = await db.query(
-        `INSERT INTO merchants (name, address, contact_person, phone, email, merchant_code, status,
-                                sms_consent_at, sms_consent_source, sms_phone)
-         VALUES ($1,$2,$3,$4,$5,$6,'PENDING', CASE WHEN $7 THEN now() END,
-                 CASE WHEN $7 THEN 'merchant_signup' END,$8)
-         RETURNING merchant_code`, [...values.slice(0, 7), notificationPhone]
-      );
+    const user=await authenticatedBusinessUser(req);
+    if (!user) return res.status(401).json({error:'Sign in with a confirmed business email first.'});
+    const profile=businessProfile(req.body,user.email);
+    if (!profile) return res.status(400).json({error:'Enter your business name, full address, contact person and US phone. Choose text or call and agree to receive the verification code.'});
+    const db=getDb();
+    const owned=await db.query('SELECT id FROM merchants WHERE owner_auth_user_id=$1',[user.id]);
+    if (owned.rows.length) return res.status(409).json({error:'Your business is already connected. Open your dashboard.'});
+    if (!await reserveVerification(db,user.id,profile.phone)) return res.status(429).json({error:'Too many verification requests. Wait before requesting another code.'});
+    const placeId=await findBusinessPlace(profile.name,profile.address);
+    if (!placeId || !await matchesListedPhone(placeId,profile.phone)) {
+      return res.status(422).json({error:'We could not match that name, address and phone to one Google Maps location. Enter the exact business name, full address and publicly listed phone.'});
     }
-    let message = 'Business profile received. We will contact you to verify it before dashboard access is enabled.';
-    if (smsConsent === true) {
-      try {
-        await sendSms(notificationPhone,
-          `VentText: Reply YES ${saved.rows[0].merchant_code} to confirm customer message notifications for your business. Reply STOP to opt out.`);
-        message += ' Check your phone and reply YES with the code shown in our text to confirm notifications.';
-      } catch (error) {
-        console.error('Business SMS confirmation failed:', error);
-        message += ' We could not send the SMS confirmation; contact VentText to finish setup.';
+    const existing=await db.query("SELECT id FROM merchants WHERE google_place_id=$1 AND (owner_auth_user_id IS NOT NULL OR status='CLAIMED')",[placeId]);
+    if (existing.rows.length) return res.status(409).json({error:'This business already has an owner. Contact VentText for an account transfer.'});
+    const challenge=newChallenge();
+    await db.query(`INSERT INTO business_claims(user_id,profile,google_place_id,phone,code_hash,code_salt,expires_at)
+      VALUES($1,$2,$3,$4,$5,$6,now()+interval '10 minutes')
+      ON CONFLICT(user_id) DO UPDATE SET profile=EXCLUDED.profile,google_place_id=EXCLUDED.google_place_id,
+      phone=EXCLUDED.phone,code_hash=EXCLUDED.code_hash,code_salt=EXCLUDED.code_salt,
+      expires_at=EXCLUDED.expires_at,attempts=0,verified_at=NULL`,
+      [user.id,profile,placeId,profile.phone,challenge.hash,challenge.salt]);
+    try {
+      if (profile.channel === 'voice') {
+        const digits=challenge.code.split('').join(' ');
+        await twilioClient.calls.create({from:process.env.TWILIO_PHONE_NUMBER,to:profile.phone,
+          twiml:`<Response><Say>Your Vent Text business verification code is ${digits}. Again, ${digits}. This code expires in ten minutes. Do not share this code.</Say></Response>`});
+      } else {
+        await sendSms(profile.phone,`VentText business verification code: ${challenge.code}. Expires in 10 minutes. Only enter it at venttext.com. Do not share it. Reply STOP to opt out.`);
       }
+    } catch {
+      await db.query('UPDATE business_claims SET code_hash=NULL,code_salt=NULL,expires_at=NULL WHERE user_id=$1 AND code_hash=$2',[user.id,challenge.hash]);
+      return res.status(502).json({error:'The verification code could not be delivered. Check the number; choose a call for a landline.'});
     }
-    return res.status(201).json({ message });
-  } catch (error) {
-    console.error('Business signup failed:', error);
-    return res.status(500).json({ error: 'We could not save your business profile. Please try again.' });
+    return res.status(200).json({message:`Verification ${profile.channel === 'voice' ? 'call' : 'text'} requested. Enter the six-digit code within 10 minutes.`});
+  } catch {
+    console.error('Business verification request failed');
+    return res.status(503).json({error:'Business verification is temporarily unavailable. Please try again.'});
   }
 }

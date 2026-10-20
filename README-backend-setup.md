@@ -41,7 +41,7 @@ VentText uses a single shared number for every merchant. The merchant is identif
 - First message starts with a **known code** → routed to that merchant.
 - First message starts with an **unknown code** → a lightweight `UNCLAIMED` merchant listing is auto-created so nothing is lost (the "holding queue" from the claim-flow doc), and it can be claimed later.
 - **No code** and no open thread → VentText replies asking which business it's about; when the customer replies with the code, that same thread is adopted and routed.
-- Follow-up messages continue the existing open thread automatically.
+- Code-less follow-ups currently need explicit business routing; see `LAUNCH-READINESS.md`.
 
 Each inbound message also runs a quick pipeline before a human sees it: a **DB-based rate limit** (per customer+merchant) and a transparent **keyword severity score** (0–100) stored on the conversation. Reseats receipt verification is stubbed in `pipeline.js` until you pick that integration.
 
@@ -63,7 +63,7 @@ You need somewhere for the schema to create tables. Two easy options that connec
 Then, in your provider's SQL editor:
 
 - **Fresh database:** paste and run `schema.sql`.
-- **You already ran the old `schema.sql` before:** run `migrations/002_twilio_connect.sql` instead — it adds the new `api_key` column and indexes, and seeds a demo merchant.
+- **You already ran the old `schema.sql` before:** run `migrations/002_twilio_connect.sql` instead — it adds the new `api_key` column and indexes, and revokes the former public demo credential.
 
 ---
 
@@ -118,18 +118,22 @@ If nothing happens, check the Vercel **Logs** tab — the most common first-run 
 
 ## Step 6 — Log into the merchant dashboard
 
-Open `https://venttext.com/dashboard.html` and enter the unique API key issued after manual business verification. No shared demo key may be used in production. The formerly documented demo credential has been revoked and is rejected by the API.
+Open `https://www.venttext.com/merchant-signup.html`. Business managers create an email/password account with Supabase Auth, confirm their email, and sign in. Enter the exact Google Maps business name, full address, contact person and publicly listed US phone. Explicitly request a verification text or call (calls support landlines), then enter the six-digit code within ten minutes. The verified account connects to the matching merchant record and receives dashboard access automatically. Existing complaints remain attached to that merchant. Businesses already owned by another account require a transfer; the API never silently replaces an owner.
 
-You'll see the inbox of open complaints, can open a thread, and reply — each reply goes out as an SMS to the customer from your VentText number. The dashboard polls every 10 seconds. Pusher events use private channels; private subscription authentication must be implemented before adding a browser Pusher subscriber.
+Customers do not register. They text complaints and receipt photos directly; `join.html` now explains the direct-SMS flow.
 
-Issue a real API key per merchant when they claim their business, e.g.:
+### One-time business account activation
 
-```sql
-UPDATE merchants
-   SET api_key = 'vt_live_' || encode(gen_random_bytes(16), 'hex'),
-       status  = 'CLAIMED'
- WHERE merchant_code = 'MARIO123';
-```
+1. Apply `006_business_accounts.sql` and `007_business_server_policies.sql` in order. Both have been applied to the VentText Supabase project. The backend login needs the specified table grants and RLS policies; browser roles have no access to claim challenges.
+2. In Supabase **Authentication → URL Configuration**, set Site URL to `https://www.venttext.com` and add the exact redirect `https://www.venttext.com/merchant-signup.html`. Keep email confirmation enabled. Configure production SMTP in **Authentication → Email**; Supabase's built-in mail sender is for testing and may restrict recipients. These settings were not accessible through the connected management tools and must be checked before launch.
+3. Enable Google Places API (New), billing, Text Search and Place Details access for the server key. Place Details uses the `internationalPhoneNumber` field solely for a temporary comparison with the applicant's supplied number. Only the Place ID and applicant-entered profile are stored.
+4. Existing Twilio account credentials and sender are used for explicitly requested verification texts/calls. Confirm the sender can make voice calls for landlines. No Twilio Verify service or new private environment variable is required.
+5. Test with one consenting business: confirmation email, sign-in, code text/call, code verification, inbox access, password reset, and isolation from a second account. No real messages or calls were sent by the automated tests.
+
+Public Supabase settings are in `auth-config.js`; they intentionally contain only a publishable key. Passwords stay with Supabase Auth. Browser sessions refresh with the locally bundled official Supabase SDK. Rebuild with `npm ci && npm run build:auth` after changing SDK versions. The bundle is committed, so publishing does not depend on a build-time secret. The backend verifies tokens with Supabase Auth and authorizes using `merchants.owner_auth_user_id`, never user-editable metadata.
+
+Challenges are salted hashes, expire in ten minutes, allow five attempts, and are consumed under a database row lock. Persistent limits allow at most one request per minute per account, five per hour per account, three per hour per phone and 100 per hour globally, including failed lookups. Applicants cannot reserve a location before verification. Existing legacy API keys remain accepted for compatibility, but new dashboard access uses business sessions.
+
 
 ---
 
@@ -146,7 +150,7 @@ UPDATE merchants
 - **Receipt verification** — `pipeline.js` `verifyReceipt()` is a stub until the Reseats integration is chosen.
 - **Auto-resolution / coupon issuing** — the schema supports it (`coupon_ceiling_cents`, `coupon_issued_cents`); the decision logic isn't built.
 - **SLA escalation job** — `response_deadline` is set on each conversation, but nothing yet fires the overdue-escalation text; add a cron/background job.
-- **Full merchant auth/login** — the API-key scheme is real but minimal; swap `auth.js` for a session/login system when you build merchant accounts. The claim/verification flow (SMS/email code) from the claim-flow doc still needs building.
+- **Business account activation tests** — confirm production SMTP, redirect configuration, and real Google/Twilio verification with an authorized business before launch.
 
 ## Receipt photo reading (Google Cloud Vision)
 
@@ -176,6 +180,5 @@ works without it. Lookup is limited to three inbound messages per sender per hou
 Businesses opt in on the signup form with a separate unchecked SMS choice and a notification mobile
 number distinct from the public business phone. Twilio sends a confirmation request to that mobile. A reply of `YES <code>` from that
 same number enables a daily, generic notification when customer messages are waiting. `STOP`
-withdraws consent. Google-listed phone numbers are never used as SMS recipients: a public phone
-listing is not SMS consent. Business profile verification and dashboard key issuance remain manual.
+withdraws consent. Google-listed phones are used for verification only after an authorized applicant explicitly requests a code at that supplied number. A public listing does not authorize complaint notifications. Business verification and dashboard access are automatic after email and phone confirmation; alerts still require separate opt-in.
 Verify the Twilio sender's registration and campaign settings before sending US application texts.
