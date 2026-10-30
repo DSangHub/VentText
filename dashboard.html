@@ -44,11 +44,30 @@
   .bubble.outbound { align-self: flex-end; background: var(--outbound); border-bottom-right-radius: 4px; }
   .bubble .ts { display: block; font-size: 10px; color: var(--muted); margin-top: 4px; }
   .composer { display: flex; gap: 10px; padding: 14px 18px; border-top: 1px solid var(--line); background: var(--panel); }
-  .composer input { flex: 1; background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
-    border-radius: 8px; padding: 10px 12px; font-size: 14px; }
+  .composer textarea { flex: 1; min-width:0; resize:vertical; background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
+    border-radius: 8px; padding: 10px 12px; font:inherit; font-size:14px; line-height:1.4; }
   .composer button, .gate button { background: var(--accent); border: none; color: white; padding: 10px 16px;
     border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; }
   .composer button:disabled { opacity: .5; cursor: default; }
+  .coupon-templates { padding:12px 18px; border-top:1px solid var(--line); background:var(--panel); }
+  .coupon-templates h2 { margin:0 0 5px; font-size:14px; }
+  .coupon-templates p { margin:4px 0 9px; color:var(--muted); font-size:12px; }
+  .coupon-options { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+  .coupon-option { text-align:left; border:1px dashed var(--accent); border-radius:9px; background:var(--panel-2); color:var(--text); padding:12px; cursor:pointer; }
+  .coupon-option:hover,.coupon-option:focus-visible { background:var(--outbound); }
+  .coupon-option strong { display:block; font-size:20px; margin-bottom:4px; }
+  .coupon-option span { font-size:12px; }
+  .reply-status { margin:0; padding:0 18px 10px; color:var(--muted); background:var(--panel); font-size:12px; }
+  @media (max-width:700px) {
+    body { height:auto; min-height:100vh; }
+    header { flex-wrap:wrap; }
+    .layout { flex-direction:column; }
+    .list { width:100%; max-height:150px; flex:0 0 auto; border-right:0; border-bottom:1px solid var(--line); }
+    .thread { min-height:460px; }
+    .messages { min-height:120px; max-height:55vh; }
+    .bubble { max-width:90%; }
+    .composer { align-items:flex-start; }
+  }
   .empty { margin: auto; color: var(--muted); font-size: 14px; text-align: center; padding: 40px; }
   .gate { position: fixed; inset: 0; background: rgba(10,12,16,.94); display: flex; align-items: center; justify-content: center; z-index: 10; }
   .gate .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 28px; width: 380px; }
@@ -98,9 +117,21 @@
       <div class="messages" id="messages">
         <div class="empty">Select a conversation to view the thread.</div>
       </div>
-      <div class="composer" id="composer" style="display:none">
-        <input id="replyInput" placeholder="Type a reply… (sent as an SMS to the customer)" />
-        <button id="sendBtn">Send</button>
+      <section class="coupon-templates" id="couponTemplates" aria-label="Coupon templates" hidden>
+        <h2>Add a goodwill coupon</h2>
+        <p>Click a coupon to add it to your reply. You can edit the offer before sending. Honor it at checkout.</p>
+        <div class="coupon-options">
+          <button type="button" class="coupon-option" data-coupon="ten-dollars"><strong>$10 off</strong><span>Next purchase of $50 or more</span></button>
+          <button type="button" class="coupon-option" data-coupon="ten-percent"><strong>10% off</strong><span>Next purchase of any value</span></button>
+        </div>
+      </section>
+      <div id="replyArea" style="display:none">
+      <div class="composer" id="composer">
+        <label for="replyInput" class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)">Reply text</label>
+        <textarea id="replyInput" rows="3" maxlength="1600" placeholder="Type a reply or choose a coupon above…" aria-describedby="replyStatus"></textarea>
+        <button type="button" id="sendBtn">Send text</button>
+      </div>
+      <p class="reply-status" id="replyStatus" role="status" aria-live="polite">Review your reply, then click Send text.</p>
       </div>
     </div>
   </div>
@@ -116,6 +147,38 @@ let authEpoch = 0;
 let activeId = null;
 let pollTimer = null;
 let receiptUrls = [];
+let merchantName = '';
+let activeCoupon = '';
+const replyDrafts = new Map();
+
+function addCoupon(kind) {
+  if (!activeId) return;
+  const input = document.getElementById('replyInput');
+  const business = merchantName || 'our business';
+  const offers = {
+    'ten-dollars': `$10 off your next purchase of $50 or more at ${business}. Show this text at checkout to redeem.`,
+    'ten-percent': `10% off your next purchase at ${business}. No minimum purchase. Show this text at checkout to redeem.`,
+  };
+  const offer = offers[kind];
+  if (!offer) return;
+  let next;
+  if (activeCoupon && input.value.includes(activeCoupon)) {
+    next = input.value.replace(activeCoupon, offer);
+  } else if (activeCoupon && input.value.trim()) {
+    document.getElementById('replyStatus').textContent = 'Your coupon was edited. Edit the offer directly, or clear the reply before choosing another coupon.';
+    return;
+  } else {
+    next = [input.value.trimEnd(), offer].filter(Boolean).join('\n\n');
+  }
+  if (next.length > 1600) {
+    document.getElementById('replyStatus').textContent = 'Shorten your reply before adding a coupon. Texts can contain up to 1,600 characters.';
+    return;
+  }
+  input.value = next;
+  activeCoupon = offer;
+  input.focus();
+  document.getElementById('replyStatus').textContent = 'Coupon added to your draft. Review it, then click Send text. Nothing has been sent yet.';
+}
 
 function authHeaders() { return { 'Authorization': 'Bearer ' + accessToken }; }
 
@@ -142,6 +205,7 @@ function sevClass(s) { return s >= 50 ? 'sev-high' : s >= 20 ? 'sev-mid' : ''; }
 async function loadInbox() {
   let data;
   try { data = await api('/api/merchant/conversations'); } catch { return; }
+  merchantName = data.merchant.name;
   document.getElementById('merchantMeta').textContent =
     data.merchant.name + ' · ' + data.merchant.status;
   const code = data.merchant.merchant_code || '';
@@ -175,12 +239,24 @@ async function loadInbox() {
 }
 
 async function openThread(id) {
+  if (activeId !== id) {
+    if (activeId) replyDrafts.set(activeId, { text:document.getElementById('replyInput').value, coupon:activeCoupon });
+    const draft = replyDrafts.get(id);
+    document.getElementById('replyInput').value = draft?.text || '';
+    activeCoupon = draft?.coupon || '';
+    document.getElementById('replyStatus').textContent = 'Review your reply, then click Send text.';
+    document.getElementById('replyArea').style.display = 'none';
+    document.getElementById('couponTemplates').hidden = true;
+    document.getElementById('threadHead').style.display = 'none';
+    document.getElementById('messages').textContent = 'Loading conversation…';
+  }
   activeId = id;
   document.querySelectorAll('.convo').forEach(el =>
     el.classList.toggle('active', el.dataset.id === id));
   let data;
   try { data = await api('/api/merchant/messages?conversationId=' + encodeURIComponent(id)); }
   catch { return; }
+  if (activeId !== id) return;
   const head = document.getElementById('threadHead');
   head.style.display = 'block';
   const c = data.conversation;
@@ -218,7 +294,8 @@ async function openThread(id) {
       button.disabled = false;
     }
   }));
-  document.getElementById('composer').style.display = 'flex';
+  document.getElementById('replyArea').style.display = 'block';
+  document.getElementById('couponTemplates').hidden = false;
 }
 
 async function sendReply() {
@@ -226,17 +303,27 @@ async function sendReply() {
   const message = input.value.trim();
   if (!message || !activeId) return;
   const btn = document.getElementById('sendBtn');
+  if (btn.disabled) return;
+  const conversationId = activeId;
+  const sentValue = input.value;
+  const epoch = authEpoch;
   btn.disabled = true;
   try {
     await api('/api/merchant/reply', {
       method: 'POST',
-      body: JSON.stringify({ conversationId: activeId, message }),
+      body: JSON.stringify({ conversationId, message }),
     });
-    input.value = '';
-    await openThread(activeId);
+    if (epoch !== authEpoch) return;
+    if (replyDrafts.get(conversationId)?.text.trim() === message) replyDrafts.delete(conversationId);
+    if (activeId === conversationId && input.value === sentValue) {
+      input.value = '';
+      activeCoupon = '';
+      document.getElementById('replyStatus').textContent = 'Text submitted for delivery.';
+    }
+    if (activeId === conversationId) await openThread(conversationId);
     await loadInbox();
   } catch (e) {
-    alert('Could not send: ' + e.message);
+    if (epoch === authEpoch) alert('Could not send: ' + e.message);
   } finally {
     btn.disabled = false;
   }
@@ -272,11 +359,14 @@ async function signOut(msg) {
   authEpoch++;
   receiptUrls.forEach(url => URL.revokeObjectURL(url));receiptUrls=[];
   clearInterval(pollTimer);accessToken=null;activeId=null;
+  replyDrafts.clear();activeCoupon='';merchantName='';
+  document.getElementById('replyInput').value='';
+  document.getElementById('couponTemplates').hidden=true;
   document.getElementById('checkoutCard').style.display='none';
   document.getElementById('list').replaceChildren();
   document.getElementById('messages').replaceChildren();
   document.getElementById('threadHead').replaceChildren();
-  document.getElementById('composer').style.display='none';
+  document.getElementById('replyArea').style.display='none';
   document.getElementById('gate').style.display='flex';
   document.getElementById('gateErr').textContent=msg || 'Signed out.';
   await businessAuth.signOut();
@@ -285,8 +375,9 @@ async function signOut(msg) {
 // Wiring
 document.getElementById('sendBtn').addEventListener('click', sendReply);
 document.getElementById('replyInput').addEventListener('keydown', e => {
-  if (e.key === 'Enter') sendReply();
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); sendReply(); }
 });
+document.querySelectorAll('[data-coupon]').forEach(button => button.addEventListener('click', () => addCoupon(button.dataset.coupon)));
 document.getElementById('refreshBtn').addEventListener('click', () => {
   loadInbox(); if (activeId) openThread(activeId);
 });

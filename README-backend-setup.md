@@ -184,3 +184,9 @@ number distinct from the public business phone. Twilio sends a confirmation requ
 same number enables a daily, generic notification when customer messages are waiting. `STOP`
 withdraws consent. Google-listed phones are used for verification only after an authorized applicant explicitly requests a code at that supplied number. A public listing does not authorize complaint notifications. Business verification and dashboard access are automatic after email and phone confirmation; alerts still require separate opt-in.
 Verify the Twilio sender's registration and campaign settings before sending US application texts.
+
+## Coupon reply templates
+
+The merchant dashboard shows two clickable offers when a conversation is open: **$10 off the next purchase of $50 or more** and **10% off the next purchase of any value (no minimum)**. Clicking one adds an editable, business-branded coupon to the reply draft. Selecting the other replaces the unedited offer; repeated clicks do not duplicate it. Existing reply text and separate customer drafts are preserved. The merchant reviews the message and clicks **Send text**, which uses the existing authenticated Twilio reply endpoint. Clicking a coupon alone sends nothing. Enter inserts a new line; Ctrl/Cmd+Enter can send.
+
+Customers show the text at checkout, and the business honors the offer manually. These templates do not issue unique codes, enforce expiration dates, or track redemption automatically. Merchants can edit the offer and add any desired dates or terms before sending.
