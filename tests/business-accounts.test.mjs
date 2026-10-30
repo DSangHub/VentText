@@ -123,3 +123,15 @@ test('failed provider send invalidates the challenge and returns a recoverable e
  const res=response();await signup({method:'POST',body:{}},res);assert.equal(res.code,502);
  assert.ok(writes.some(w=>w.sql.includes('SET code_hash=NULL') && w.params[1]==='hash'));
 });
+
+test('a matched business with a different public phone receives a specific error and no code',async()=>{
+ const fail=()=>{throw Error('must not send or create a code');};
+ const signup=new Function('getDb','authenticatedBusinessUser','businessProfile','newChallenge','reserveVerification','findBusinessPlace','matchesListedPhone','sendSms','twilioClient',await source('api/merchant/signup.js')+';return handler;')(()=>({query:async()=>({rows:[]})}),async()=>user,()=>({phone:'+15595550100'}),fail,async()=>true,async()=>'place',async()=>false,fail,{});
+ const res=response();await signup({method:'POST',body:{}},res);assert.equal(res.code,422);assert.equal(res.body.code,'BUSINESS_PHONE_MISMATCH');
+});
+
+test('provider failures do not tell a legitimate business that its listing is missing',async()=>{
+ const fail=()=>{throw Error('must not send');};
+ const signup=new Function('getDb','authenticatedBusinessUser','businessProfile','newChallenge','reserveVerification','findBusinessPlace','matchesListedPhone','sendSms','twilioClient',await source('api/merchant/signup.js')+';return handler;')(()=>({query:async()=>({rows:[]})}),async()=>user,()=>({phone:'+15595550100'}),fail,async()=>true,async()=>{throw Error('provider unavailable');},fail,fail,{});
+ const res=response();await signup({method:'POST',body:{}},res);assert.equal(res.code,503);assert.equal(res.body.code,'BUSINESS_LOOKUP_UNAVAILABLE');
+});
