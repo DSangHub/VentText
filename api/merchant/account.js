@@ -2,6 +2,7 @@ import { getDb } from '../../db.js';
 import { authenticatedBusinessUser } from '../_lib/business-auth.js';
 import { finishClaim } from '../_lib/business-claims.js';
 import { sendSms } from '../_lib/twilio.js';
+import { readApplication } from '../_lib/business-applications.js';
 
 export default async function handler(req,res) {
   res.setHeader('Cache-Control','no-store');
@@ -12,7 +13,8 @@ export default async function handler(req,res) {
     const db=getDb();
     if (req.method === 'GET') {
       const {rows:[merchant]}=await db.query('SELECT id,name,status,merchant_code FROM merchants WHERE owner_auth_user_id=$1',[user.id]);
-      return res.status(200).json({email:user.email,merchant:merchant || null});
+      const application=await readApplication(db,user.id);
+      return res.status(200).json({email:user.email,merchant:merchant || null,application});
     }
     const code=req.body?.code;
     if (typeof code !== 'string' || !/^\d{6}$/.test(code)) return res.status(400).json({error:'Enter the six-digit verification code.'});

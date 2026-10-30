@@ -12,18 +12,30 @@
 <button id="accountSubmit">Sign in</button></form><button class="secondary" id="switchMode" type="button">Create a business account</button> <button class="secondary" id="forgot" type="button">Reset password</button>
 <p class="note">Create an account, confirm your email, then verify access to the phone listed for your business on Google Maps.</p></section>
 <section class="card" id="resetCard" hidden><h2>Choose a new password</h2><form id="resetForm"><label for="newPassword">New password</label><input id="newPassword" type="password" minlength="8" maxlength="128" autocomplete="new-password" required><button>Save password</button></form></section>
-<section class="card" id="businessCard" hidden><h2>Connect your business</h2><p id="signedEmail"></p><p>Your email account is ready. Find your business on Google Maps and enter its listing name, address and listed phone. Common address abbreviations are accepted. We’ll send a code to that phone; choose a call for a landline.</p>
-<form id="businessForm"><label for="name">Business name</label><input id="name" autocomplete="organization" maxlength="120" required>
+<section class="card" id="businessCard" hidden><h2>Connect your business</h2><p id="signedEmail"></p><p>Your email account is ready. Choose Google Maps verification or the alternative below. You can save a business profile even without a Maps listing. Choose a phone call for a landline.</p>
+<form id="businessForm"><label for="verificationMethod">How would you like to verify your business?</label>
+<select id="verificationMethod"><option value="google">Google Maps listing</option><option value="manual">My business is not on Google Maps / use another method</option></select>
+<p class="note" id="methodHelp">Use the business name, address and phone shown on Google Maps.</p>
+<label for="name">Business name</label><input id="name" autocomplete="organization" maxlength="120" required>
 <label for="address">Full business address, city, state and ZIP</label><input id="address" autocomplete="street-address" maxlength="160" required>
 <label for="contactPerson">Contact person</label><input id="contactPerson" autocomplete="name" maxlength="120" required>
-<label for="phone">Google-listed business phone (US)</label><input id="phone" type="tel" autocomplete="tel" required maxlength="25">
+<label for="phone">Business phone (US)</label><input id="phone" type="tel" autocomplete="tel" required maxlength="25">
 <label for="channel">Receive verification code by</label><select id="channel"><option value="sms">Text message</option><option value="voice">Phone call (including landlines)</option></select>
 <div class="choice" style="margin:20px 0"><input id="consent" type="checkbox" required><label for="consent">I’m authorized to manage this business and request a verification text or call at the number above. Message and data rates may apply.</label></div>
-<label for="smsPhone">Notification mobile number (optional)</label><input id="smsPhone" type="tel" autocomplete="mobile tel" maxlength="25">
+<div id="manualEvidence" hidden><h3>Business evidence</h3>
+<p class="note">Provide your business website or registration details so VentText can review the business. Phone verification confirms control of your phone; it does not approve ownership by itself. Do not include passwords, payment information, or personal identity documents.</p>
+<label for="website">Business website (HTTPS)</label><input id="website" type="url" maxlength="500" placeholder="https://yourbusiness.com">
+<label for="registration">Business registration number and issuing authority</label><input id="registration" maxlength="500" placeholder="Registration number and state/county agency">
+<label for="notes">Additional information for review (optional)</label><input id="notes" maxlength="1000">
+<button type="button" class="secondary" id="saveApplication">Save business profile without sending a code</button></div>
+<div id="notificationFields"><label for="smsPhone">Notification mobile number (optional)</label><input id="smsPhone" type="tel" autocomplete="mobile tel" maxlength="25">
 <div class="choice"><input id="smsConsent" type="checkbox"><label class="note" for="smsConsent">I agree to receive customer message notifications at this mobile number after replying YES to a separate confirmation text. Frequency varies; message and data rates may apply. Reply STOP to opt out or HELP for help. Optional; <a href="/terms.html">SMS Terms</a> and <a href="/privacy.html">Privacy Policy</a>.</label></div>
-<button id="requestCode">Send verification code</button></form>
+</div><button id="requestCode">Send verification code</button></form>
 <form id="codeForm" hidden><label for="code">Six-digit verification code</label><input id="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required><button>Verify business and open dashboard</button></form>
-<p class="note">Your inbox opens after verification. Already-owned locations and businesses without a matching public phone need help from VentText.</p></section>
+<section id="applicationStatus" hidden aria-live="polite"><h3>Business application</h3><p id="applicationState"></p><p id="reviewNote"></p>
+<button type="button" id="submitApplication" disabled>Submit business for review</button>
+<p class="note">Your profile is saved to your account. Customer complaints stay private until your business is approved.</p></section>
+<p class="note">Google Maps is optional. A matching Google-listed phone can verify your listing automatically. Other businesses can verify their own phone and submit evidence for review. Already-owned locations require an account transfer.</p></section>
 <section class="card" id="readyCard" hidden><h2>Your business is connected</h2><p id="readyName"></p><a href="/dashboard.html">Open business dashboard →</a></section>
 <button type="button" id="signOut" class="secondary" hidden>Sign out</button>
 </main><script type="module" src="/browser/business-onboarding.js"></script></body></html>

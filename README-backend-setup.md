@@ -120,6 +120,8 @@ If nothing happens, check the Vercel **Logs** tab — the most common first-run 
 
 Open `https://www.venttext.com/merchant-signup.html`. Business managers create an email/password account with Supabase Auth, confirm their email, and sign in. Enter the exact Google Maps business name, full address, contact person and publicly listed US phone. Explicitly request a verification text or call (calls support landlines), then enter the six-digit code within ten minutes. The verified account connects to the matching merchant record and receives dashboard access automatically. Existing complaints remain attached to that merchant. Businesses already owned by another account require a transfer; the API never silently replaces an owner.
 
+Businesses without a Google Maps listing can choose the alternative verification option, save a profile, verify their own phone and submit website/registration evidence for operator review. See `BUSINESS-REVIEW.md` for the private review queue and approval/rejection procedure. Existing complaints remain locked until approval.
+
 Customers do not register. They text complaints and receipt photos directly; `join.html` now explains the direct-SMS flow.
 
 ### One-time business account activation
