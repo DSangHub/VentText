@@ -7,19 +7,27 @@ import { sendSms, twilioClient } from '../_lib/twilio.js';
 export default async function handler(req,res) {
   res.setHeader('Cache-Control','no-store');
   if (req.method !== 'POST') return res.status(405).json({error:'Method not allowed'});
+  let stage='authenticate';
   try {
     const user=await authenticatedBusinessUser(req);
     if (!user) return res.status(401).json({error:'Sign in with a confirmed business email first.'});
     const profile=businessProfile(req.body,user.email);
     if (!profile) return res.status(400).json({error:'Enter your business name, full address, contact person and US phone. Choose text or call and agree to receive the verification code.'});
+    stage='database';
     const db=getDb();
     const owned=await db.query('SELECT id FROM merchants WHERE owner_auth_user_id=$1',[user.id]);
     if (owned.rows.length) return res.status(409).json({error:'Your business is already connected. Open your dashboard.'});
     if (!await reserveVerification(db,user.id,profile.phone)) return res.status(429).json({error:'Too many verification requests. Wait before requesting another code.'});
-    const placeId=await findBusinessPlace(profile.name,profile.address);
-    if (!placeId || !await matchesListedPhone(placeId,profile.phone)) {
-      return res.status(422).json({error:'We could not match that name, address and phone to one Google Maps location. Enter the exact business name, full address and publicly listed phone.'});
+    stage='place_lookup';
+    const placeId=await findBusinessPlace(profile.name,profile.address,undefined,{businessSignup:true});
+    if (!placeId) {
+      return res.status(422).json({code:'BUSINESS_NOT_FOUND',error:'We could not identify one Google Maps listing for that business name and address. Check the listing name and street number, city and state. Street/Avenue abbreviations and full state names are accepted. No verification code was sent.'});
     }
+    stage='phone_lookup';
+    if (!await matchesListedPhone(placeId,profile.phone)) {
+      return res.status(422).json({code:'BUSINESS_PHONE_MISMATCH',error:'We found the business location, but this phone does not match its Google Maps phone. Enter the listed business phone and choose Phone call for a landline. No verification code was sent.'});
+    }
+    stage='save_challenge';
     const existing=await db.query("SELECT id FROM merchants WHERE google_place_id=$1 AND (owner_auth_user_id IS NOT NULL OR status='CLAIMED')",[placeId]);
     if (existing.rows.length) return res.status(409).json({error:'This business already has an owner. Contact VentText for an account transfer.'});
     const challenge=newChallenge();
@@ -42,8 +50,8 @@ export default async function handler(req,res) {
       return res.status(502).json({error:'The verification code could not be delivered. Check the number; choose a call for a landline.'});
     }
     return res.status(200).json({message:`Verification ${profile.channel === 'voice' ? 'call' : 'text'} requested. Enter the six-digit code within 10 minutes.`});
-  } catch {
-    console.error('Business verification request failed');
-    return res.status(503).json({error:'Business verification is temporarily unavailable. Please try again.'});
+  } catch (error) {
+    console.error('Business verification request failed', {stage,code:error?.code || error?.name || 'UNKNOWN',status:error?.status || null});
+    return res.status(503).json({code:'BUSINESS_LOOKUP_UNAVAILABLE',error:'Business verification is temporarily unavailable. Your email account is saved. This is a service problem, not a business-name mismatch; please try again later.'});
   }
 }
