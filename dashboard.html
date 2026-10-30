@@ -261,7 +261,7 @@ async function signIn() {
     if (!accessToken) return;
     const account=await api('/api/merchant/account');
     if (account.merchant?.status !== 'CLAIMED') {
-      document.getElementById('gateErr').textContent='Finish business phone verification to connect your inbox.';
+      document.getElementById('gateErr').textContent=account.application?.status === 'REVIEW_PENDING' ? 'Your business profile is saved and awaiting review. Check its status on the business signup page.' : 'Finish business setup on the signup page. Google Maps verification or phone verification with business review is available.';
       return;
     }
     document.getElementById('gate').style.display='none';
