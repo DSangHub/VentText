@@ -232,7 +232,7 @@ async function loadInbox() {
         ${c.severity_score != null ? `<span class="pill ${sevClass(c.severity_score)}">sev ${c.severity_score}</span>` : ''}
       </div>
       <div class="preview">${escapeHtml(c.last_message || '')}</div>
-      <div class="preview" style="font-size:11px">${escapeHtml(c.status)} · ${fmtTime(c.last_message_at || c.created_at)}</div>
+      <div class="preview" style="font-size:11px">${escapeHtml(c.category || 'Business')}${c.zip_code ? ' · ZIP ' + escapeHtml(c.zip_code) : ''} · ${escapeHtml(c.status)} · ${fmtTime(c.last_message_at || c.created_at)}</div>
     </div>`).join('');
   list.querySelectorAll('.convo').forEach(el =>
     el.addEventListener('click', () => openThread(el.dataset.id)));
@@ -261,7 +261,7 @@ async function openThread(id) {
   head.style.display = 'block';
   const c = data.conversation;
   head.innerHTML = `<div class="who">${escapeHtml(c.customer_name || c.customer_phone)}</div>
-    <div class="sub">${escapeHtml(c.status)}${c.severity_score != null ? ' · severity ' + Number(c.severity_score) : ''}
+    <div class="sub">${escapeHtml(c.category || 'Business')}${c.zip_code ? ' · ZIP ' + escapeHtml(c.zip_code) : ''} · ${escapeHtml(c.status)}${c.severity_score != null ? ' · severity ' + Number(c.severity_score) : ''}
     ${c.response_deadline ? ' · due ' + fmtTime(c.response_deadline) : ''}</div>`;
   const box = document.getElementById('messages');
   receiptUrls.forEach(url => URL.revokeObjectURL(url));

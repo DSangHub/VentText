@@ -14,6 +14,16 @@ const CODE_RE = /^\s*([A-Za-z][A-Za-z0-9]{2,23})\s*(?:[-:|]\s*|\s+)([\s\S]*)$/;
 // Customer-supplied business details, never copied from Google Places content.
 const BUSINESS_RE = /^\s*BUSINESS:\s*([^|]{2,120})\s*\|\s*([^|]{2,160})\s*\|\s*([\s\S]{1,2000})$/i;
 const BUSINESS_PROSE_RE = /^\s*BUSINESS:\s*(.{2,120}?)\s+in\s+([a-z][a-z\s.'-]{2,60}?)\s*\.\s*(.{1,2000})$/i;
+const VENT_RE = /^\s*VENT:\s*([^|]{2,32})\s*\|\s*([^|]{2,120})\s*\|\s*(\d{5})\s*\|\s*([\s\S]{10,1600})$/i;
+const CATEGORIES = ['Retail', 'Restaurant', 'Utility', 'Cable & internet', 'Banking', 'Healthcare', 'Travel', 'Other'];
+
+export function parseVent(body) {
+  const match = String(body || '').match(VENT_RE);
+  if (!match) return null;
+  const category = CATEGORIES.find(item => item.toLowerCase() === match[1].trim().toLowerCase());
+  if (!category) return null;
+  return { category, name: match[2].trim(), zip: match[3], complaint: match[4].trim() };
+}
 
 export function parseBusinessRequest(body) {
   if (typeof body !== 'string') return null;
@@ -53,13 +63,25 @@ export function parseMerchantCode(body) {
  * Returns { merchant, autoSeeded } or null.
  */
 export async function resolveMerchant(db, body) {
-  const business = parseBusinessRequest(body);
+  const vent = parseVent(body);
+  const business = vent || parseBusinessRequest(body);
   if (business) {
-    const { name, location } = business;
-    const placeId = await findBusinessPlace(name, location);
-    if (!placeId) return null;
-    const found = await db.query('SELECT * FROM merchants WHERE google_place_id = $1', [placeId]);
-    if (found.rows.length) return { merchant: found.rows[0], autoSeeded: false, rest: business.complaint };
+    const { name } = business;
+    const location = vent?.zip || business.location;
+    // A Google listing is optional. Utility providers and local businesses may
+    // have no searchable place; an unclaimed record still holds the complaint.
+    let placeId = null;
+    try { placeId = await findBusinessPlace(name, location); }
+    catch (error) { console.error('Optional Places match failed:', error); }
+    if (placeId) {
+      const found = await db.query('SELECT * FROM merchants WHERE google_place_id = $1', [placeId]);
+      if (found.rows.length) return { merchant: found.rows[0], autoSeeded: false, rest: business.complaint, vent };
+    }
+    const same = await db.query(
+      'SELECT * FROM merchants WHERE lower(name)=lower($1) AND lower(address)=lower($2) ORDER BY created_at LIMIT 1',
+      [name, location]
+    );
+    if (same.rows.length) return { merchant: same.rows[0], autoSeeded: false, rest: business.complaint, vent };
     const code = 'VT' + randomBytes(8).toString('hex').toUpperCase();
     const seeded = await db.query(
       `INSERT INTO merchants (name, address, merchant_code, status, google_place_id)
@@ -68,7 +90,7 @@ export async function resolveMerchant(db, body) {
        RETURNING *`,
       [name, location, code, placeId]
     );
-    return { merchant: seeded.rows[0], autoSeeded: true, rest: business.complaint };
+    return { merchant: seeded.rows[0], autoSeeded: true, rest: business.complaint, vent };
   }
   const parsed = parseMerchantCode(body);
   if (!parsed) return null;

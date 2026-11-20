@@ -190,3 +190,22 @@ Verify the Twilio sender's registration and campaign settings before sending US 
 The merchant dashboard shows two clickable offers when a conversation is open: **$10 off the next purchase of $50 or more** and **10% off the next purchase of any value (no minimum)**. Clicking one adds an editable, business-branded coupon to the reply draft. Selecting the other replaces the unedited offer; repeated clicks do not duplicate it. Existing reply text and separate customer drafts are preserved. The merchant reviews the message and clicks **Send text**, which uses the existing authenticated Twilio reply endpoint. Clicking a coupon alone sends nothing. Enter inserts a new line; Ctrl/Cmd+Enter can send.
 
 Customers show the text at checkout, and the business honors the offer manually. These templates do not issue unique codes, enforce expiration dates, or track redemption automatically. Merchants can edit the offer and add any desired dates or terms before sending.
+# Local vents
+
+Customers can text `VENT: Category | Business name | ZIP | What happened` for
+retail, restaurant, utility, cable & internet, banking, healthcare, travel,
+or other businesses. A Google listing and receipt are optional. A new provider
+is an unclaimed record; only a verified owner can use the business dashboard.
+
+Run the `local_vent_feed` migration before deploying the new endpoints.
+Texts stay private. The customer receives a short conversation code and can
+reply `POST CODE` to publish the first complaint (up to 300 characters) to
+`/local.html`, or `REMOVE CODE` to hide it. The public endpoint selects
+only business name, category, ZIP, excerpt, status, and publish time.
+Sensitive details are rejected by a basic text check; this is not a substitute
+for human moderation if the feed grows.
+
+ZIP lookup by device location requires a server-side
+`GOOGLE_GEOCODING_API_KEY` with Google's Geocoding API enabled and usage
+limits configured. Without it, visitors can enter a ZIP manually. Never put
+this key in browser code.

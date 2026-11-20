@@ -22,7 +22,7 @@ export default async function handler(req, res) {
   try {
     // Verify the conversation belongs to this merchant before returning anything.
     const convo = await db.query(
-      `SELECT c.id, c.status, c.severity_score, c.response_deadline,
+      `SELECT c.id, c.status, c.category, c.zip_code, c.severity_score, c.response_deadline,
               cu.phone AS customer_phone, cu.name AS customer_name
          FROM conversations c
          JOIN customers cu ON cu.id = c.customer_id

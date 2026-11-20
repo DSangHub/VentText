@@ -10,7 +10,7 @@
 import twilio from 'twilio';
 import { getDb } from '../_lib/db.js';
 import { sendSms } from '../_lib/twilio.js';
-import { resolveMerchant, parseBusinessRequest } from '../_lib/merchants.js';
+import { resolveMerchant, parseBusinessRequest, parseVent } from '../_lib/merchants.js';
 import { checkRateLimit, scoreSeverity } from '../_lib/pipeline.js';
 import { newMessageEvent } from '../_lib/realtime.js';
 import { notifyMerchantIfSubscribed } from '../_lib/merchant-notifications.js';
@@ -86,6 +86,46 @@ export default async function handler(req, res) {
     }
     const customerId = customer.rows[0].id;
 
+    // Publishing is a separate, explicit choice made from the same phone.
+    // Nothing in a private SMS thread or a receipt is published by default.
+    const visibility = body.trim().match(/^(POST|REMOVE)\s+([a-f0-9]{8})$/i);
+    if (visibility) {
+      const target = await db.query(
+        `SELECT c.id, m.body AS first_vent FROM conversations c
+           JOIN LATERAL (
+             SELECT body FROM messages WHERE conversation_id=c.id AND direction='inbound'
+               AND body ~* '^\\s*VENT:' ORDER BY created_at LIMIT 1
+           ) m ON true
+          WHERE c.customer_id=$1 AND left(c.id::text,8)=$2 LIMIT 2`,
+        [customerId, visibility[2].toLowerCase()]
+      );
+      let reply = 'That vent code was not found for this phone.';
+      if (target.rows.length === 1) {
+        const { id, first_vent } = target.rows[0];
+        const parsed = parseVent(first_vent);
+        const logged = await db.query(
+          `INSERT INTO messages (conversation_id,direction,sender,body,twilio_sid)
+           VALUES ($1,'inbound','customer',$2,$3) ON CONFLICT DO NOTHING RETURNING id`,
+          [id, body, sid]
+        );
+        if (!logged.rows.length) return res.status(200).set('Content-Type', 'text/xml').send('<Response></Response>');
+        if (visibility[1].toUpperCase() === 'REMOVE') {
+          await db.query('UPDATE conversations SET public_consent_at=NULL, public_excerpt=NULL WHERE id=$1', [id]);
+          reply = 'Removed from the public local feed. Your private conversation is still saved.';
+        } else if (parsed && isSafePublicText(parsed.complaint)) {
+          await db.query(
+            `UPDATE conversations SET public_consent_at=now(), public_excerpt=$2
+             WHERE id=$1 AND zip_code=$3`, [id, parsed.complaint.slice(0, 300), parsed.zip]
+          );
+          reply = `Your vent is now visible in the ${parsed.zip} local feed without your phone number or receipt. Text REMOVE ${visibility[2].toUpperCase()} to hide it.`;
+        } else {
+          reply = 'This text contains possible contact or account details. It remains private. To post, send a new vent without personal information.';
+        }
+      }
+      await sendSms(fromNumber, reply);
+      return res.status(200).set('Content-Type', 'text/xml').send('<Response></Response>');
+    }
+
     const receiptConfirmation = parseReceiptConfirmation(body);
     if (receiptConfirmation) {
       const result = await confirmReceipt(db, { customerId, confirmation: receiptConfirmation, body, messageSid: sid });
@@ -100,12 +140,11 @@ export default async function handler(req, res) {
     // 3. Identify which merchant this is for (Option B). A merchant code on the
     //    first message resolves (or auto-seeds) the merchant.
     let resolved = null;
-    const structured = /^\s*BUSINESS:/i.test(body);
+    const structured = /^\s*(?:BUSINESS|VENT):/i.test(body);
     let lookupProblem = null;
     try {
       if (structured) {
-        if (!parseBusinessRequest(body)) lookupProblem = 'format';
-        else if (!process.env.GOOGLE_PLACES_API_KEY) lookupProblem = 'unavailable';
+        if (!(parseBusinessRequest(body) || parseVent(body))) lookupProblem = 'format';
         else {
           // Only BUSINESS requests consume paid Google lookups. General texts
           // must not exhaust this budget before a customer provides details.
@@ -114,7 +153,7 @@ export default async function handler(req, res) {
                JOIN conversations c ON c.id = m.conversation_id
                JOIN customers cu ON cu.id = c.customer_id
               WHERE cu.phone = $1 AND m.direction = 'inbound'
-                AND m.body ~* '^\\s*BUSINESS:'
+                AND m.body ~* '^\\s*(BUSINESS|VENT):'
                 AND m.created_at > now() - interval '1 hour'`, [fromNumber]
           );
           if (recent.rows[0].count >= 3) lookupProblem = 'rate_limit';
@@ -132,6 +171,13 @@ export default async function handler(req, res) {
     // 4. Pick the conversation to append to.
     const { conversationId, merchantId, promptForCode } =
       await selectConversation(db, customerId, merchant, structured && !merchant);
+
+    if (resolved?.vent) {
+      await db.query(
+        `UPDATE conversations SET category=$2, zip_code=$3 WHERE id=$1`,
+        [conversationId, resolved.vent.category, resolved.vent.zip]
+      );
+    }
 
     // 5. Store the inbound message.
     const complaintText = resolved && resolved.rest ? resolved.rest : body;
@@ -183,7 +229,11 @@ export default async function handler(req, res) {
     // 8. Reply to the customer (unless rate-limited, to avoid a reply storm).
     if (!limited) {
       if (receiptReply) await sendReceiptReply(db, fromNumber, receiptReply, conversationId);
-      else await sendSms(fromNumber, ackMessage({ promptForCode, merchant, body, lookupProblem }));
+      else {
+        const ack = ackMessage({ promptForCode, merchant, body, lookupProblem });
+        const share = resolved?.vent ? ` Private by default. To show this complaint in the ${resolved.vent.zip} local feed, text POST ${conversationId.slice(0,8).toUpperCase()}. Text REMOVE ${conversationId.slice(0,8).toUpperCase()} to hide it.` : '';
+        await sendSms(fromNumber, ack + share);
+      }
     }
 
     // 9. Twilio expects a response; empty TwiML is fine since we replied via the API.
@@ -193,6 +243,11 @@ export default async function handler(req, res) {
     console.error('Inbound webhook error:', err);
     return res.status(500).send('Internal error');
   }
+}
+
+function isSafePublicText(text) {
+  // Do not publish contact info, account numbers, links, or exact addresses.
+  return text.length >= 10 && !/(?:@|https?:\/\/|www\.|\b\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b|\b\d{5,}\b|\b\d{1,5}\s+\w+\s+(?:st|street|ave|avenue|rd|road|blvd)\b)/i.test(text);
 }
 
 async function sendReceiptReply(db, phone, body, conversationId) {
@@ -282,13 +337,17 @@ async function selectConversation(db, customerId, merchant, forceUnassigned = fa
 
 function ackMessage({ promptForCode, merchant, body, lookupProblem }) {
   if (promptForCode) {
+    if (/^\s*VENT:/i.test(body)) {
+      if (lookupProblem === 'rate_limit') return 'We saved your text. Please wait before trying another business lookup.';
+      return 'We saved your text. Reply like this: VENT: Utility | Company name | 93720 | What happened. A Google listing is not required.';
+    }
     if (/^\s*BUSINESS:/i.test(body)) {
       if (lookupProblem === 'unavailable') return 'We saved your text, but business lookup is temporarily unavailable. If you have the checkout business code, reply with it.';
       if (lookupProblem === 'rate_limit') return 'We saved your text. Please wait before trying another business lookup, or reply with the checkout business code.';
       if (lookupProblem === 'format') return 'We saved your text. Please reply like this: BUSINESS: Rosa\'s | Fresno, CA | Bad service at Blackstone and Shaw.';
       return 'We saved your text but could not confidently identify that business location. Check the exact name and city, or reply with the checkout business code.';
     }
-    return 'We saved your text but need the business to route it. Reply with the code shown at checkout, or text BUSINESS: Name | City, State | what happened.';
+    return 'We saved your text but need the business to route it. Reply VENT: Category | Business name | ZIP | what happened.';
   }
   if (merchant && merchant.status !== 'CLAIMED') {
     return "Got it — we've logged your message. The business can respond after it joins and verifies its profile.";

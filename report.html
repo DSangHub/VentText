@@ -1,61 +1,21 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Report an experience — VentText</title>
-<link rel="stylesheet" href="styles.css">
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Start a vent — VentText</title><link rel="stylesheet" href="styles.css">
 <style>
-  .report { max-width: 620px; margin: 0 auto; padding: 52px 24px 80px; }
-  .report h1 { font-family: var(--mono); font-size: 2rem; }
-  .report p { line-height: 1.5; }
-  .report-card { background: var(--paper-100); color: var(--paper-ink); border-radius: 14px; padding: 24px; margin-top: 24px; }
-  .report-card label { display:block; font-weight:700; margin:18px 0 8px; }
-  .report-card input, .report-card textarea { width:100%; box-sizing:border-box; padding:12px; border:1px solid #aaa; border-radius:8px; background:white; color:#17202a; font:inherit; }
-  .report-card textarea { min-height:120px; resize:vertical; }
-  .report-card button { width:100%; margin-top:18px; padding:13px; border:0; border-radius:8px; background:var(--stamp-red); color:white; font:inherit; font-weight:700; cursor:pointer; }
-  .report-card button:disabled { opacity:.5; cursor:not-allowed; }
-  .report-card .help { color:var(--ink-700); font-size:.9rem; }
-  .report-card .error { color:#a22920; font-weight:700; min-height:1.5em; }
-</style>
-</head>
-<body>
-<nav class="nav"><div class="nav-inner"><div class="logo"><span class="dot"></span>VentText</div><div class="nav-links"><a href="index.html">Home</a><a href="how-it-works.html">How It Works</a><a href="merchant-signup.html">For Businesses</a></div></div></nav>
-<main class="report">
-  <h1>Text about your visit</h1>
-  <p>Scan the business's VentText QR code at checkout with your phone camera. It opens this page with the business code filled in. You can also type the code printed beside the QR.</p>
-  <div class="report-card">
-    <form id="reportForm">
-      <label for="code">Checkout business code</label>
-      <input id="code" name="code" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="For example, VT1234…" maxlength="24" required>
-      <p class="help">Use the VentText code shown by the business. No code? You can text a receipt photo instead and confirm the business details we read.</p>
-      <label for="complaint">What happened?</label>
-      <textarea id="complaint" name="complaint" maxlength="1600" required placeholder="Tell the business about your experience"></textarea>
-      <p id="error" class="error" role="alert"></p>
-      <button type="submit">Open text message</button>
-      <p class="help">Your phone will open a prepared SMS. Press Send there to submit it. Nothing is sent from this page.</p>
-    </form>
-  </div>
-  <p>No VentText checkout code? Send a clear receipt photo and describe what happened to <a href="sms:+15595505388">+1 (559) 550-5388</a>. Show the business name and address at the top. We ask you to confirm the detected details. You can also text <strong>BUSINESS: Name | City, State | What happened</strong>.</p>
-</main>
+.report {max-width:760px;margin:auto;padding:48px 24px 80px}.report h1{font-family:var(--mono);font-size:clamp(2rem,5vw,3rem);line-height:1.1}.report p{margin:14px 0;line-height:1.6}.report-card{background:var(--paper-100);color:var(--paper-ink);border-radius:16px;padding:clamp(20px,5vw,34px);margin-top:28px}.report-card label{display:block;font-weight:700;margin:18px 0 8px}.report-card input,.report-card textarea,.report-card select{width:100%;padding:14px;border:1px solid #87918c;border-radius:8px;background:#fff;color:#17202a;font:inherit;font-size:1rem}.report-card textarea{min-height:130px;resize:vertical}.report-card button{width:100%;margin-top:22px;padding:15px;border:0;border-radius:8px;background:var(--stamp-red);color:#fff;font:inherit;font-weight:700;cursor:pointer}.help{font-size:.95rem;color:var(--ink-700)}.error{color:#b22c20;font-weight:700;min-height:1.5em}.report a:not(.btn){text-decoration:underline;color:var(--resolve-green)}
+</style></head><body>
+<nav class="nav"><div class="nav-inner"><a class="logo" href="index.html"><span class="dot"></span>VentText</a><div class="nav-links"><a href="index.html">Home</a><a href="local.html">Local vents</a><a href="merchant-signup.html">For businesses</a></div></div></nav>
+<main class="report"><div class="eyebrow">Retail · utilities · cable · and more</div><h1>Tell us what happened.</h1><p>Vent about any business or service. No account or receipt required. Your message stays private unless you choose to post it to the local feed later.</p>
+<div class="report-card"><form id="reportForm">
+<div id="codeBox" hidden><label for="code">Checkout code from QR</label><input id="code" maxlength="24" autocomplete="off" readonly><p class="help">This code routes your text to the business that displayed the QR.</p></div>
+<label for="category">Type of business or service</label><select id="category" required><option value="">Choose one</option><option>Retail</option><option>Restaurant</option><option>Utility</option><option>Cable &amp; internet</option><option>Banking</option><option>Healthcare</option><option>Travel</option><option>Other</option></select>
+<label for="business">Business or provider name</label><input id="business" required maxlength="120" placeholder="For example, a store or cable provider">
+<label for="zip">Where did this happen? ZIP code</label><input id="zip" required inputmode="numeric" autocomplete="postal-code" pattern="[0-9]{5}" maxlength="5" placeholder="93720">
+<label for="complaint">What happened?</label><textarea id="complaint" required minlength="10" maxlength="1600" placeholder="Tell us about the service or experience"></textarea>
+<p id="error" class="error" role="alert"></p><button type="submit">Continue to text message</button><p class="help">Your phone opens a prepared SMS. Press Send to submit it. VentText may route it to a verified business dashboard; an unclaimed business must join and verify before replying. A Google Maps listing is not required.</p>
+</form></div><p>Prefer to type it yourself? Text <strong>VENT: Category | Business name | ZIP | What happened</strong> to <a href="sms:+15595505388">(559) 550-5388</a>. If you already have a checkout code, start your text with that code. Replies are private. To publish to <a href="local.html">Local vents</a>, follow the separate POST instruction in your confirmation text.</p></main>
 <footer><div class="wrap footer-inner"><div>© 2026 VentText — a service of Lazy Man Ventures LLC.</div><div class="footer-links"><a href="privacy.html">Privacy</a><a href="terms.html">SMS Terms</a></div></div></footer>
 <script>
-  const input = document.getElementById('code');
-  const fromQr = new URLSearchParams(location.search).get('code') || '';
-  if (/^[a-z][a-z0-9]{2,23}$/i.test(fromQr)) input.value = fromQr.toUpperCase();
-  document.getElementById('reportForm').addEventListener('submit', event => {
-    event.preventDefault();
-    const code = input.value.trim().toUpperCase();
-    const complaint = document.getElementById('complaint').value.trim();
-    const error = document.getElementById('error');
-    if (!/^[A-Z][A-Z0-9]{2,23}$/.test(code)) {
-      error.textContent = 'Enter the letters and numbers of the VentText checkout code.';
-      return;
-    }
-    if (!complaint) { error.textContent = 'Tell us what happened first.'; return; }
-    error.textContent = '';
-    window.location.href = 'sms:+15595505388?&body=' + encodeURIComponent(code + ' - ' + complaint);
-  });
-</script>
-</body>
-</html>
+const code=new URLSearchParams(location.search).get('code')||'';if(/^[a-z][a-z0-9]{2,23}$/i.test(code)&&/\d/.test(code)){document.getElementById('code').value=code.toUpperCase();document.getElementById('codeBox').hidden=false}
+document.getElementById('reportForm').addEventListener('submit',event=>{event.preventDefault();const category=document.getElementById('category').value,business=document.getElementById('business').value.trim(),zip=document.getElementById('zip').value.trim(),complaint=document.getElementById('complaint').value.trim(),error=document.getElementById('error');if(!/^[0-9]{5}$/.test(zip)||!business||business.includes('|')||complaint.length<10||complaint.includes('|')){error.textContent='Enter a five-digit ZIP, a business name, and at least ten characters describing what happened. Avoid the | character.';return}error.textContent='';const text=document.getElementById('code').value?document.getElementById('code').value+' - '+complaint:'VENT: '+category+' | '+business+' | '+zip+' | '+complaint;location.href='sms:+15595505388?&body='+encodeURIComponent(text)});
+</script></body></html>
