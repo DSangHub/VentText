@@ -5,7 +5,10 @@ import { parseVent, resolveMerchant } from '../api/_lib/merchants.js';
 test('complaints accept utilities and cable providers with a ZIP and no receipt', () => {
   assert.deepEqual(parseVent('VENT: Utility | Valley Electric | 93720 | My bill doubled without an explanation.'), {
     category: 'Utility', name: 'Valley Electric', zip: '93720',
-    complaint: 'My bill doubled without an explanation.',
+    complaint: 'My bill doubled without an explanation.', lang:'en',
+  });
+  assert.deepEqual(parseVent('VENT-ES: Servicios públicos | Luz Local | 93720 | Mi factura aumentó sin explicación.'), {
+    category:'Utility', name:'Luz Local', zip:'93720', complaint:'Mi factura aumentó sin explicación.', lang:'es',
   });
   assert.equal(parseVent('VENT: Utility | Valley Electric | not a ZIP | Billing complaint'), null);
   assert.equal(parseVent('VENT: unknown | Provider | 93720 | Billing complaint'), null);

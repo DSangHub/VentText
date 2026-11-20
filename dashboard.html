@@ -150,14 +150,19 @@ let receiptUrls = [];
 let merchantName = '';
 let activeCoupon = '';
 const replyDrafts = new Map();
+const ui = value => window.VentTextI18n?.translate(value) || value;
 
 function addCoupon(kind) {
   if (!activeId) return;
   const input = document.getElementById('replyInput');
   const business = merchantName || 'our business';
   const offers = {
-    'ten-dollars': `$10 off your next purchase of $50 or more at ${business}. Show this text at checkout to redeem.`,
-    'ten-percent': `10% off your next purchase at ${business}. No minimum purchase. Show this text at checkout to redeem.`,
+    'ten-dollars': document.documentElement.lang === 'es'
+      ? `$10 de descuento en tu próxima compra de $50 o más en ${business}. Muestra este mensaje en caja.`
+      : `$10 off your next purchase of $50 or more at ${business}. Show this text at checkout to redeem.`,
+    'ten-percent': document.documentElement.lang === 'es'
+      ? `10% de descuento en tu próxima compra en ${business}. Sin compra mínima. Muestra este mensaje en caja.`
+      : `10% off your next purchase at ${business}. No minimum purchase. Show this text at checkout to redeem.`,
   };
   const offer = offers[kind];
   if (!offer) return;
@@ -198,7 +203,7 @@ async function api(path, opts = {}) {
 function fmtTime(iso) {
   if (!iso) return '';
   const d = new Date(iso);
-  return d.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleString(document.documentElement.lang === 'es' ? 'es-US' : undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 function sevClass(s) { return s >= 50 ? 'sev-high' : s >= 20 ? 'sev-mid' : ''; }
 
@@ -222,7 +227,7 @@ async function loadInbox() {
   }
   const list = document.getElementById('list');
   if (!data.conversations.length) {
-    list.innerHTML = '<div class="empty">No open complaints. 🎉</div>';
+    list.innerHTML = `<div class="empty">${ui('No open complaints. 🎉')}</div>`;
     return;
   }
   list.innerHTML = data.conversations.map(c => `
@@ -232,7 +237,7 @@ async function loadInbox() {
         ${c.severity_score != null ? `<span class="pill ${sevClass(c.severity_score)}">sev ${c.severity_score}</span>` : ''}
       </div>
       <div class="preview">${escapeHtml(c.last_message || '')}</div>
-      <div class="preview" style="font-size:11px">${escapeHtml(c.category || 'Business')}${c.zip_code ? ' · ZIP ' + escapeHtml(c.zip_code) : ''} · ${escapeHtml(c.status)} · ${fmtTime(c.last_message_at || c.created_at)}</div>
+      <div class="preview" style="font-size:11px">${escapeHtml(ui(c.category || 'Business'))}${c.zip_code ? ' · ZIP ' + escapeHtml(c.zip_code) : ''} · ${escapeHtml(ui(c.status))} · ${fmtTime(c.last_message_at || c.created_at)}</div>
     </div>`).join('');
   list.querySelectorAll('.convo').forEach(el =>
     el.addEventListener('click', () => openThread(el.dataset.id)));
@@ -261,7 +266,7 @@ async function openThread(id) {
   head.style.display = 'block';
   const c = data.conversation;
   head.innerHTML = `<div class="who">${escapeHtml(c.customer_name || c.customer_phone)}</div>
-    <div class="sub">${escapeHtml(c.category || 'Business')}${c.zip_code ? ' · ZIP ' + escapeHtml(c.zip_code) : ''} · ${escapeHtml(c.status)}${c.severity_score != null ? ' · severity ' + Number(c.severity_score) : ''}
+    <div class="sub">${escapeHtml(ui(c.category || 'Business'))}${c.zip_code ? ' · ZIP ' + escapeHtml(c.zip_code) : ''} · ${escapeHtml(ui(c.status))}${c.severity_score != null ? ' · severity ' + Number(c.severity_score) : ''}
     ${c.response_deadline ? ' · due ' + fmtTime(c.response_deadline) : ''}</div>`;
   const box = document.getElementById('messages');
   receiptUrls.forEach(url => URL.revokeObjectURL(url));
@@ -381,11 +386,14 @@ document.querySelectorAll('[data-coupon]').forEach(button => button.addEventList
 document.getElementById('refreshBtn').addEventListener('click', () => {
   loadInbox(); if (activeId) openThread(activeId);
 });
+document.addEventListener('venttext:language', () => {
+  if (accessToken) { loadInbox(); if (activeId) openThread(activeId); }
+});
 document.getElementById('logoutBtn').addEventListener('click', () => signOut());
 
 // Sessions refresh through Supabase; dashboard keys are no longer entered here.
 try { localStorage.removeItem('vt_api_key'); } catch {}
 signIn();
 </script>
-</body>
+<script defer src="/i18n.js"></script></body>
 </html>

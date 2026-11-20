@@ -94,7 +94,7 @@ export default async function handler(req, res) {
         `SELECT c.id, m.body AS first_vent FROM conversations c
            JOIN LATERAL (
              SELECT body FROM messages WHERE conversation_id=c.id AND direction='inbound'
-               AND body ~* '^\\s*VENT:' ORDER BY created_at LIMIT 1
+               AND body ~* '^\\s*VENT(-ES)?:' ORDER BY created_at LIMIT 1
            ) m ON true
           WHERE c.customer_id=$1 AND left(c.id::text,8)=$2 LIMIT 2`,
         [customerId, visibility[2].toLowerCase()]
@@ -103,6 +103,7 @@ export default async function handler(req, res) {
       if (target.rows.length === 1) {
         const { id, first_vent } = target.rows[0];
         const parsed = parseVent(first_vent);
+        const spanish = parsed?.lang === 'es';
         const logged = await db.query(
           `INSERT INTO messages (conversation_id,direction,sender,body,twilio_sid)
            VALUES ($1,'inbound','customer',$2,$3) ON CONFLICT DO NOTHING RETURNING id`,
@@ -111,15 +112,17 @@ export default async function handler(req, res) {
         if (!logged.rows.length) return res.status(200).set('Content-Type', 'text/xml').send('<Response></Response>');
         if (visibility[1].toUpperCase() === 'REMOVE') {
           await db.query('UPDATE conversations SET public_consent_at=NULL, public_excerpt=NULL WHERE id=$1', [id]);
-          reply = 'Removed from the public local feed. Your private conversation is still saved.';
+          reply = spanish ? 'Se quitó del tablón local. Tu conversación privada sigue guardada.' : 'Removed from the public local feed. Your private conversation is still saved.';
         } else if (parsed && isSafePublicText(parsed.complaint)) {
           await db.query(
             `UPDATE conversations SET public_consent_at=now(), public_excerpt=$2
              WHERE id=$1 AND zip_code=$3`, [id, parsed.complaint.slice(0, 300), parsed.zip]
           );
-          reply = `Your vent is now visible in the ${parsed.zip} local feed without your phone number or receipt. Text REMOVE ${visibility[2].toUpperCase()} to hide it.`;
+          reply = spanish
+            ? `Tu queja aparece en el tablón local de ${parsed.zip}, sin tu número ni recibo. Responde REMOVE ${visibility[2].toUpperCase()} para ocultarla.`
+            : `Your vent is now visible in the ${parsed.zip} local feed without your phone number or receipt. Text REMOVE ${visibility[2].toUpperCase()} to hide it.`;
         } else {
-          reply = 'This text contains possible contact or account details. It remains private. To post, send a new vent without personal information.';
+          reply = spanish ? 'El texto podría contener datos personales o de cuenta. Sigue privado. Para publicar, envía otra queja sin esos datos.' : 'This text contains possible contact or account details. It remains private. To post, send a new vent without personal information.';
         }
       }
       await sendSms(fromNumber, reply);
@@ -140,7 +143,7 @@ export default async function handler(req, res) {
     // 3. Identify which merchant this is for (Option B). A merchant code on the
     //    first message resolves (or auto-seeds) the merchant.
     let resolved = null;
-    const structured = /^\s*(?:BUSINESS|VENT):/i.test(body);
+    const structured = /^\s*(?:BUSINESS|VENT(?:-ES)?):/i.test(body);
     let lookupProblem = null;
     try {
       if (structured) {
@@ -153,7 +156,7 @@ export default async function handler(req, res) {
                JOIN conversations c ON c.id = m.conversation_id
                JOIN customers cu ON cu.id = c.customer_id
               WHERE cu.phone = $1 AND m.direction = 'inbound'
-                AND m.body ~* '^\\s*(BUSINESS|VENT):'
+                AND m.body ~* '^\\s*(BUSINESS|VENT(-ES)?):'
                 AND m.created_at > now() - interval '1 hour'`, [fromNumber]
           );
           if (recent.rows[0].count >= 3) lookupProblem = 'rate_limit';
@@ -180,7 +183,7 @@ export default async function handler(req, res) {
     }
 
     // 5. Store the inbound message.
-    const complaintText = resolved && resolved.rest ? resolved.rest : body;
+    const complaintText = resolved && resolved.rest ? resolved.rest.replace(/^ES:\s*/i, '') : body;
     const inserted = await db.query(
       `INSERT INTO messages (conversation_id, direction, sender, body, media_url, twilio_sid)
        VALUES ($1, 'inbound', 'customer', $2, $3, $4) ON CONFLICT DO NOTHING
@@ -230,8 +233,14 @@ export default async function handler(req, res) {
     if (!limited) {
       if (receiptReply) await sendReceiptReply(db, fromNumber, receiptReply, conversationId);
       else {
-        const ack = ackMessage({ promptForCode, merchant, body, lookupProblem });
-        const share = resolved?.vent ? ` Private by default. To show this complaint in the ${resolved.vent.zip} local feed, text POST ${conversationId.slice(0,8).toUpperCase()}. Text REMOVE ${conversationId.slice(0,8).toUpperCase()} to hide it.` : '';
+        const spanish = resolved?.vent?.lang === 'es' || /^\s*VENT-ES:/i.test(body) || /^ES:\s*/i.test(resolved?.rest || '');
+        const ack = ackMessage({ promptForCode, merchant, body, lookupProblem, spanish });
+        const token = conversationId.slice(0,8).toUpperCase();
+        const share = resolved?.vent
+          ? spanish
+            ? ` Tu queja es privada por defecto. Para mostrarla en el tablón de ${resolved.vent.zip}, responde POST ${token}. Para ocultarla, responde REMOVE ${token}.`
+            : ` Private by default. To show this complaint in the ${resolved.vent.zip} local feed, text POST ${token}. Text REMOVE ${token} to hide it.`
+          : '';
         await sendSms(fromNumber, ack + share);
       }
     }
@@ -335,9 +344,17 @@ async function selectConversation(db, customerId, merchant, forceUnassigned = fa
   return { conversationId: created.rows[0].id, merchantId: null, promptForCode: true };
 }
 
-function ackMessage({ promptForCode, merchant, body, lookupProblem }) {
+function ackMessage({ promptForCode, merchant, body, lookupProblem, spanish }) {
+  if (spanish) {
+    if (promptForCode) {
+      if (lookupProblem === 'rate_limit') return 'Guardamos tu mensaje. Espera antes de intentar otra búsqueda.';
+      return 'Guardamos tu mensaje. Responde así: VENT-ES: Servicios públicos | Nombre del negocio | 93720 | Qué ocurrió. No necesita ficha en Google.';
+    }
+    if (merchant?.status !== 'CLAIMED') return 'Recibimos tu queja. El negocio podrá responder después de registrarse y verificar su perfil.';
+    return 'Recibimos tu queja. El negocio puede responder desde su panel.';
+  }
   if (promptForCode) {
-    if (/^\s*VENT:/i.test(body)) {
+    if (/^\s*VENT(?:-ES)?:/i.test(body)) {
       if (lookupProblem === 'rate_limit') return 'We saved your text. Please wait before trying another business lookup.';
       return 'We saved your text. Reply like this: VENT: Utility | Company name | 93720 | What happened. A Google listing is not required.';
     }
