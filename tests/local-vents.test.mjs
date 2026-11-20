@@ -24,3 +24,20 @@ test('a provider without a Google listing is saved as unclaimed', async () => {
   assert.equal(result.vent.zip, '93720');
   assert.equal(calls[1].args[1], '93720');
 });
+
+test('device coordinates resolve to a ZIP area without retaining coordinates', async () => {
+  const { default: handler } = await import('../api/location/zip.js');
+  const original = globalThis.fetch;
+  let requested;
+  globalThis.fetch = async url => {
+    requested = new URL(url);
+    return { ok: true, async json() { return { result: { geographies: { '2020 Census ZIP Code Tabulation Areas': [{ ZCTA5: '93721' }] } } }; } };
+  };
+  const res = { statusCode: 200, setHeader() {}, status(code) { this.statusCode=code; return this; }, json(data) { this.data=data; return this; } };
+  try {
+    await handler({ method:'GET', query:{ latitude:'36.7378', longitude:'-119.7871' } }, res);
+    assert.equal(res.statusCode, 200);
+    assert.deepEqual(res.data, { zip:'93721', approximate:true });
+    assert.equal(requested.hostname, 'geocoding.geo.census.gov');
+  } finally { globalThis.fetch=original; }
+});

@@ -205,7 +205,6 @@ only business name, category, ZIP, excerpt, status, and publish time.
 Sensitive details are rejected by a basic text check; this is not a substitute
 for human moderation if the feed grows.
 
-ZIP lookup by device location requires a server-side
-`GOOGLE_GEOCODING_API_KEY` with Google's Geocoding API enabled and usage
-limits configured. Without it, visitors can enter a ZIP manually. Never put
-this key in browser code.
+ZIP lookup by device location uses the U.S. Census geocoder's 2020 ZIP Code
+Tabulation Area layer, which approximates postal ZIPs; visitors can correct
+the ZIP manually. Coordinates are not stored. No new API key is needed.
