@@ -20,6 +20,8 @@ export default async function handler(req, res) {
     const rows = await db.query(
       `SELECT c.id,
               c.status,
+              c.category,
+              c.zip_code,
               c.severity_score,
               c.response_deadline,
               c.created_at,

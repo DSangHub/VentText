@@ -43,6 +43,10 @@ CREATE TABLE conversations (
   coupon_issued_cents INTEGER,
   coupon_code TEXT,
   response_deadline TIMESTAMPTZ,
+  category TEXT,
+  zip_code TEXT,
+  public_consent_at TIMESTAMPTZ,
+  public_excerpt TEXT,
   created_at TIMESTAMPTZ DEFAULT now(),
   resolved_at TIMESTAMPTZ
 );
