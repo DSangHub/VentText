@@ -14,15 +14,19 @@ const CODE_RE = /^\s*([A-Za-z][A-Za-z0-9]{2,23})\s*(?:[-:|]\s*|\s+)([\s\S]*)$/;
 // Customer-supplied business details, never copied from Google Places content.
 const BUSINESS_RE = /^\s*BUSINESS:\s*([^|]{2,120})\s*\|\s*([^|]{2,160})\s*\|\s*([\s\S]{1,2000})$/i;
 const BUSINESS_PROSE_RE = /^\s*BUSINESS:\s*(.{2,120}?)\s+in\s+([a-z][a-z\s.'-]{2,60}?)\s*\.\s*(.{1,2000})$/i;
-const VENT_RE = /^\s*VENT:\s*([^|]{2,32})\s*\|\s*([^|]{2,120})\s*\|\s*(\d{5})\s*\|\s*([\s\S]{10,1600})$/i;
+const VENT_RE = /^\s*VENT(-ES)?:\s*([^|]{2,32})\s*\|\s*([^|]{2,120})\s*\|\s*(\d{5})\s*\|\s*([\s\S]{10,1600})$/i;
 const CATEGORIES = ['Retail', 'Restaurant', 'Utility', 'Cable & internet', 'Banking', 'Healthcare', 'Travel', 'Other'];
+const SPANISH_CATEGORIES = { tienda:'Retail', restaurante:'Restaurant', 'servicios publicos':'Utility',
+  'cable e internet':'Cable & internet', banca:'Banking', salud:'Healthcare', viajes:'Travel', otro:'Other' };
 
 export function parseVent(body) {
   const match = String(body || '').match(VENT_RE);
   if (!match) return null;
-  const category = CATEGORIES.find(item => item.toLowerCase() === match[1].trim().toLowerCase());
+  const supplied = match[2].trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const translated = SPANISH_CATEGORIES[supplied];
+  const category = CATEGORIES.find(item => item.toLowerCase() === supplied) || translated;
   if (!category) return null;
-  return { category, name: match[2].trim(), zip: match[3], complaint: match[4].trim() };
+  return { category, name: match[3].trim(), zip: match[4], complaint: match[5].trim(), lang: match[1] || translated ? 'es' : 'en' };
 }
 
 export function parseBusinessRequest(body) {
